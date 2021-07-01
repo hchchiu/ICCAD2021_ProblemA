@@ -8,6 +8,7 @@
 	- [新增]  `BitWiseOperation()`，計算seed
 	- [新增]  `graph2Blif()`，只有先打出架構(可無視)
 	- [新增]  `main()` 裡面 `srand(time(NULL))`
+	- [新增]  每一個node都有seed
 
 ## To Do List
 
