@@ -52,17 +52,21 @@ Node* initialNewnode(string name, int type);
 // Select gate type
 int selectGateType(string gate);
 
+//run topological sort
 void topologicalSort(Graph& graph, vector<Node*>& sortNode);
+//topological sort recursive
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack);
+//Set every node piset and bitwise operation seed
 void setNodePIandSeed (Graph& graph, vector<Node*>& sortNode);
-bool existPiSet(vector<Node*>& fanoutgate, Node* pi);
-
 //Set the random seed
 void setRandomSeed(Graph& R1, Graph& R2, Graph& G1);
-// Give random seed
+// return random seed
 unsigned* getRandomSeed();
 //BitWiseOperation
 void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
+
+//transfer graph to blif file and write blif file
+void graph2Blif(Graph& path);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -123,6 +127,7 @@ int main(int argc, char* argv[])
 	setNodePIandSeed (R2, sortR2);
 	setNodePIandSeed (G1, sortG1);
 	//outFile(R2, argv[4]);
+
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -395,11 +400,14 @@ void topologicalSort(Graph& graph, vector<Node*>& sortNode)
 	for (; it1 != graph.netlist.end(); ++it1)
 		visited[*it1] = false;
 
+	/*
 	map<Node*, bool>::iterator it2 = visited.begin();
 	for (; it2 != visited.end(); ++it2) {
 		if (!it2->second)
 			topologicalSortUtil(graph, it2->first, visited, Stack);
 	}
+	*/
+
 
 	int pos = 0;
 	sortNode.resize(Stack.size());
@@ -411,7 +419,7 @@ void topologicalSort(Graph& graph, vector<Node*>& sortNode)
 }
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack)
 {
-	// Mark the current node as visited
+	//Mark the current node as visited
 	visited[node] = true;
 	for (int i = 0; i < node->fanout.size(); ++i) {
 		Node* nextNode = node->fanout[i];
@@ -430,6 +438,7 @@ void setNodePIandSeed (Graph& graph, vector<Node*>& sortNode)
 				//set the PI to the PISET
 				Node* faninNode = currNode->fanin[j];
 				currNode->piset.insert(faninNode->piset.begin(), faninNode->piset.end());
+
 				//record fanin seed
 				faninSeed.push_back(faninNode->seeds);
 			}
@@ -478,29 +487,17 @@ void BitWiseOperation(vector<unsigned*>& faninSeed, Node* currNode)
 		if (type == 0) {
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~faninSeed[0][i];
 		}
-		//buffer
-		else if (type == 7) {
+		//buffer or assign
+		else if (type == 7 || type == 8) {
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] ;
 		}
-		//assign
-		else if (type == 8) {
-			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i];
-		}
 	}
 }
-bool existPiSet(vector<Node*>& fanoutgate, Node* pi)
-{
-	for (int i = 0; i < fanoutgate.size(); ++i) {
-		if (fanoutgate[i] == pi)
-			return true;
-	}
-	return false;
-}
+
 unsigned* getRandomSeed()
 {
 	//32bits
 	unsigned* bw = new unsigned[nWords];
-
 	for (int i = 0; i < nWords; i++) bw[i] = RANDOM_UNSIGNED;
 	/*
 	for (int i = 0; i < nWords; i++)
@@ -510,6 +507,21 @@ unsigned* getRandomSeed()
 	return bw;
 }
 
+void graph2Blif(Graph& path)
+{
+	//we need to make sure input data structure
+	//...
+
+	ofstream outfile("check.blif");
+	//write -> ".model check"
+	outfile << ".model check" << endl;
+	//write -> ".inputs ..."
+	//...
+	//write -> ".outputs ..."
+	//...
+	//write -> ".names ..."
+	//...
+}
 
 /*
 void createRectifyPair(Graph& R2, Graph& G1)
