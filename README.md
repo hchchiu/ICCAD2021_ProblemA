@@ -9,8 +9,10 @@
 	- [新增]  `graph2Blif()`，只有先打出架構(可無視)
 	- [新增]  `main()` 裡面 `srand(time(NULL))`
 	- [新增]  每一個node都有seed
+<div>
+<img src="/doc/case1.png" width=80%>
+</div>
 
-[img](https://github.com/hchchiu/ICCAD2021_ProblemA/blob/master/doc/case1.png)
 ## To Do List
 -[] 利用Graph的Netlist做Structur Compare
 -[] 利用Random Simulation做Compare
