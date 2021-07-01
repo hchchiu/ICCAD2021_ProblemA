@@ -1,6 +1,7 @@
 #include<iostream>
 #include<fstream>
 #include<sstream>
+#include<time.h>
 #include<string>
 #include<cstring>
 #include<vector>
@@ -16,7 +17,6 @@ typedef pair<string, int> Pair;
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
-
 struct Node
 {
 	string name;
@@ -53,11 +53,11 @@ Node* initialNewnode(string name, int type);
 int selectGateType(string gate);
 
 //run topological sort
-void topologicalSort(Graph& graph, vector<Node*>& sortNode);
+void topologicalSort(Graph& graph);
 //topological sort recursive
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack);
 //Set every node piset and bitwise operation seed
-void setNodePIandSeed (Graph& graph, vector<Node*>& sortNode);
+void setNodePIsetandSeed  (Graph& graph);
 //Set the random seed
 void setRandomSeed(Graph& R1, Graph& R2, Graph& G1);
 // return random seed
@@ -91,6 +91,7 @@ int nWords = 1;
 //./eco R1.v R2.v G1.v patch.v 
 int main(int argc, char* argv[])
 {
+	srand(time(NULL));
 	//original netlist
 	Graph R1;
 	//golden netlist
@@ -111,21 +112,17 @@ int main(int argc, char* argv[])
 
 	//Set random seed to PI
 	setRandomSeed(R1, R2, G1);
-	//Save netlist in topological sort oder
-	vector<Node*> sortR1;
-	vector<Node*> sortR2;
-	vector<Node*> sortG1;
 
 	////Start topological sort
 	//In order to set ID and PI
-	topologicalSort(R1, sortR1);
-	topologicalSort(R2, sortR2);
-	topologicalSort(G1, sortG1);
+	topologicalSort(R1);
+	topologicalSort(R2);
+	topologicalSort(G1);
 
 	//Set all nodes Primary Input
-	setNodePIandSeed (R1, sortR1);
-	setNodePIandSeed (R2, sortR2);
-	setNodePIandSeed (G1, sortG1);
+	setNodePIsetandSeed  (R1);
+	setNodePIsetandSeed  (R2);
+	setNodePIsetandSeed  (G1);
 	//outFile(R2, argv[4]);
 
 }
@@ -391,7 +388,7 @@ void setRandomSeed(Graph& R1, Graph& R2, Graph& G1)
 	}
 }
 
-void topologicalSort(Graph& graph, vector<Node*>& sortNode)
+void topologicalSort(Graph& graph)
 {
 	stack<Node*> Stack;
 	map<Node*, bool> visited;
@@ -407,15 +404,22 @@ void topologicalSort(Graph& graph, vector<Node*>& sortNode)
 			topologicalSortUtil(graph, it2->first, visited, Stack);
 	}
 	*/
-
+	
+	for (int i = 0; i < graph.PI.size();++i) {
+		if (!visited[graph.PI[i]])
+			topologicalSortUtil(graph, graph.PI[i], visited, Stack);
+	}
 
 	int pos = 0;
+
+	vector<Node*> sortNode;
 	sortNode.resize(Stack.size());
 	while (Stack.empty() == false) {
 		//cout << Stack.top() << " ";
 		sortNode[pos++] = Stack.top();
 		Stack.pop();
 	}
+	graph.netlist = sortNode;
 }
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack)
 {
@@ -428,10 +432,10 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 	}
 	Stack.push(node);
 }
-void setNodePIandSeed (Graph& graph, vector<Node*>& sortNode)
+void setNodePIsetandSeed  (Graph& graph)
 {
-	for (int i = 0; i < sortNode.size(); ++i) {
-		Node* currNode = sortNode[i];
+	for (int i = 0; i < graph.netlist.size(); ++i) {
+		Node* currNode = graph.netlist[i];
 		if (currNode->fanin.size() > 0) {
 			vector<unsigned*> faninSeed;
 			for (int j = 0; j < currNode->fanin.size(); ++j) {
@@ -515,6 +519,7 @@ void graph2Blif(Graph& path)
 	ofstream outfile("check.blif");
 	//write -> ".model check"
 	outfile << ".model check" << endl;
+
 	//write -> ".inputs ..."
 	//...
 	//write -> ".outputs ..."
