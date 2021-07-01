@@ -12,7 +12,7 @@
 
 
 ## To Do List
-- [] 利用Graph的Netlist做Structur Compare
-- [] 利用Random Simulation做Compare
-- [] 利用SAT做Compare
+- [ ] 利用Graph的Netlist做Structur Compare
+- [ ] 利用Random Simulation做Compare
+- [ ] 利用SAT做Compare
 
