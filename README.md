@@ -10,7 +10,7 @@
 	- [新增]  `main()` 裡面 `srand(time(NULL))`
 	- [新增]  每一個node都有seed
 <div>
-<img src="/doc/case1.png" width=80%>
+<img src="/doc/case1.png" width=50%>
 </div>
 
 ## To Do List
