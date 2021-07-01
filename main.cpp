@@ -22,7 +22,7 @@ struct Node
 	string name;
 	vector<Node*> fanin;
 	vector<Node*> fanout;
-	set<Node*> piset;
+	set <Node*> piset;
 	unsigned* seeds;
 	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
 	int realGate; // -1:default
