@@ -10,7 +10,7 @@
 #include<set>
 #include<algorithm>
 using namespace std;
-
+//test
 typedef pair<string, int> Pair;
 
 #define RANDOM_UNSIGNED ((((unsigned)rand()) << 24) ^ (((unsigned)rand()) << 12) ^ ((unsigned)rand()))
