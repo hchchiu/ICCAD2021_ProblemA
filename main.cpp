@@ -86,6 +86,28 @@ void createRectifyPair(Graph& R2, Graph& G1);
 bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node object, Node golden);
 
+/* Function Flow
+   ----------------------------------------------------------
+	loadFile  ¡÷   verilog2graph  ¡÷   assignCommandTransform 
+						.		  ¡÷   initialNewnode
+						.         ¡÷   selectGateType
+						.         ¡÷   PiPoRecord
+   ----------------------------------------------------------
+	   ¡õ
+   ----------------------------------
+	setRandomSeed  ¡÷   getRandomSeed
+   ----------------------------------
+	   ¡õ
+   -----------------------------------------
+	topologicalSort  ¡÷  topologicalSortUtil
+   -----------------------------------------
+	   ¡õ
+   ------------------------------------------
+	setNodePIsetandSeed  ¡÷  BitWiseOperation
+   ------------------------------------------
+*/
+
+
 int nWords = 1;
 // inpurt format
 //./eco R1.v R2.v G1.v patch.v 

@@ -8,6 +8,6 @@ module top(a, b, c, y);
   and g10 (g10, g7, g8);
   or g11 (g11, g10, g9);
   or g12 (g12, g8, g9);
-  and g13 (g13, g11, g12);
+  and y (y, g11, g12);
 endmodule
 
