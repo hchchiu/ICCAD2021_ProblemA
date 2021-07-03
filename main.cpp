@@ -69,10 +69,9 @@ void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
 
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path_original, Graph& path_golden);
-
 void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*,bool>& visited);
-
 void node2Blif(ofstream& outfile,Node* currNode);
+void buildMiter(ofstream& outfile, vector<Node*>& PO_original,vector<Node*>PO_golden);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -591,6 +590,8 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//golden netlist
 	netlist2Blif(outfile, path_golden.netlist, visited);
 
+	buildMiter(outfile, path_original.PO, path_golden.PO);
+	outfile << ".end";
 	outfile.close();
 }
 void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*, bool>& visited)
@@ -663,6 +664,34 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		}
 	}
 }
+void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_golden)
+{
+	vector<Node*> PO_goldenTemp=PO_golden;
+	vector<string> miter;
+	for (int i = 0; i < PO_original.size(); ++i) {
+		for (int j = 0; j < PO_goldenTemp.size(); ++j) {
+			if (PO_original[i]->name == PO_goldenTemp[j]->name) {
+				outfile << ".names";
+				//outfile .names ...
+				outfile << " " << PO_original[i]->name + "_" + PO_original[i]->graphName
+						<<" "<< PO_goldenTemp[i]->name + "_" + PO_goldenTemp[i]->graphName
+						<< " " << "miter_"+ to_string(i)<<endl;
+				//outfile xor gate
+				outfile << "01 1" << endl
+						<< "10 1" << endl;
+				PO_goldenTemp.erase(PO_goldenTemp.begin()+j);
+
+				miter.push_back("miter_" + to_string(i));
+			}
+		}
+	}
+	//need to add
+	for (int i = 0; i < miter.size(); ++i) {
+		outfile << ".names " << miter[i] << " output" << endl;
+		outfile << "1 1"<<endl;
+	}
+}
+
 
 /*
 void createRectifyPair(Graph& R2, Graph& G1)
