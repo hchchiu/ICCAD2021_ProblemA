@@ -10,8 +10,6 @@
 #include<set>
 #include<algorithm>
 using namespace std;
-//test
-typedef pair<string, int> Pair;
 
 #define RANDOM_UNSIGNED ((((unsigned)rand()) << 24) ^ (((unsigned)rand()) << 12) ^ ((unsigned)rand()))
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
@@ -36,6 +34,17 @@ struct Graph
 	map<string, Node*> PIMAP;
 };
 
+struct MatchInfo
+{
+	map<Node*, Node*> matches; //success match pair (golden,origin)
+	map<Node*, bool> originState; //(in this map represent it visited , true represent still in NodeSet)
+	map<Node*, bool> goldenState; //(in this map represent it visited , true represent still in NodeSet)
+	vector<Node*> originNode; //the remains is need to save
+	map<Node*, bool> originRemoveNode; //the content node is needed to remove
+	vector<Node*> goldenNode; //the remains is need to create to origin
+	set<Node*> originSupprotSet; //record support set
+	set<Node*> goldenSupprotSet; //record support set
+};
 
 void loadFile(Graph& graph, char* argv);
 
@@ -57,7 +66,7 @@ void topologicalSort(Graph& graph);
 //topological sort recursive
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack);
 //Set every node piset and bitwise operation seed
-void setNodePIsetandSeed  (Graph& graph);
+void setNodePIsetandSeed(Graph& graph);
 //Set the random seed
 void setRandomSeed(Graph& R1, Graph& R2, Graph& G1);
 // return random seed
@@ -65,8 +74,23 @@ unsigned* getRandomSeed();
 //BitWiseOperation
 void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
 
+
+// Match pair by using structure compare
+void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo);
+// structure compare operation
+void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo);
+//
+bool IsGateTypeEqual(Node* origin, Node* golden);
+// 
+bool IsFaninEqual(Node* origin, Node* golden, MatchInfo matchInfo);
+// 
+bool IsFaninVisited(Node* ptr, map<Node*, bool> maps);
+// Confirm is visited
+bool IsVisited(Node* target, map<Node*, bool>maps);
+
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path);
+
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -120,10 +144,13 @@ int main(int argc, char* argv[])
 	topologicalSort(G1);
 
 	//Set all nodes Primary Input
-	setNodePIsetandSeed  (R1);
-	setNodePIsetandSeed  (R2);
-	setNodePIsetandSeed  (G1);
-	//outFile(R2, argv[4]);
+	setNodePIsetandSeed(R1);
+	setNodePIsetandSeed(R2);
+	setNodePIsetandSeed(G1);
+
+
+	MatchInfo matchInfo;
+	structureCompareMain(G1, R2, matchInfo);
 
 }
 
@@ -308,7 +335,7 @@ void PiPoRecord(string str, Graph& graph)
 					graph.PIMAP[req->name] = req;
 					req->type = 9;
 					req->seeds = new unsigned[nWords];
-;					graph.netlist.push_back(req);
+					;					graph.netlist.push_back(req);
 					graph.PI.push_back(req);
 					//req->piset.push_back(req);
 					req->piset.insert(req);
@@ -404,8 +431,8 @@ void topologicalSort(Graph& graph)
 			topologicalSortUtil(graph, it2->first, visited, Stack);
 	}
 	*/
-	
-	for (int i = 0; i < graph.PI.size();++i) {
+
+	for (int i = 0; i < graph.PI.size(); ++i) {
 		if (!visited[graph.PI[i]])
 			topologicalSortUtil(graph, graph.PI[i], visited, Stack);
 	}
@@ -432,7 +459,7 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 	}
 	Stack.push(node);
 }
-void setNodePIsetandSeed  (Graph& graph)
+void setNodePIsetandSeed(Graph& graph)
 {
 	for (int i = 0; i < graph.netlist.size(); ++i) {
 		Node* currNode = graph.netlist[i];
@@ -446,7 +473,7 @@ void setNodePIsetandSeed  (Graph& graph)
 				//record fanin seed
 				faninSeed.push_back(faninNode->seeds);
 			}
-			BitWiseOperation(faninSeed,currNode);
+			BitWiseOperation(faninSeed, currNode);
 		}
 	}
 }
@@ -463,7 +490,7 @@ void BitWiseOperation(vector<unsigned*>& faninSeed, Node* currNode)
 	if (faninSeed.size() > 1) {
 		//and gate
 		if (type == 1) {
-			for (int i = 0; i < nWords; ++i) currNode-> seeds[i] = faninSeed[0][i] & faninSeed[1][i];
+			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] & faninSeed[1][i];
 		}
 		//or gate
 		else if (type == 2) {
@@ -486,14 +513,14 @@ void BitWiseOperation(vector<unsigned*>& faninSeed, Node* currNode)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~(faninSeed[0][i] ^ faninSeed[1][i]);
 		}
 	}
-	else{
+	else {
 		//not gate
 		if (type == 0) {
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~faninSeed[0][i];
 		}
 		//buffer or assign
 		else if (type == 7 || type == 8) {
-			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] ;
+			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i];
 		}
 	}
 }
@@ -509,6 +536,234 @@ unsigned* getRandomSeed()
 			cout << GetBit(bw, k + (i * 32));
 	*/
 	return bw;
+}
+
+void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
+{
+	for (int i = 0; i < golden.PI.size(); i++) {
+		// put (golden , origin) PI in matches 
+		matchInfo.matches[golden.PI[i]] = origin.PI[i]; 
+		matchInfo.originState[origin.PI[i]] = true; 
+		matchInfo.goldenState[golden.PI[i]] = true;
+		matchInfo.originSupprotSet.insert(origin.PI[i]);
+		matchInfo.goldenSupprotSet.insert(golden.PI[i]);
+	}
+
+	for (int i = 0; i < origin.netlist.size(); i++)
+		matchInfo.originNode.push_back(origin.netlist[i]);
+	for (int i = 0; i < golden.netlist.size(); i++)
+		matchInfo.goldenNode.push_back(golden.netlist[i]);
+
+	int originIndex = 0, goldenIndex = 0;
+	while (true) {
+		bool ending = false;
+		Node* originPtr = matchInfo.originNode[originIndex];
+		Node* goldenPtr = matchInfo.goldenNode[goldenIndex];
+		while (matchInfo.originState.find(originPtr) != matchInfo.originState.end() && matchInfo.originState[originPtr] == false) {
+			matchInfo.originNode.erase(matchInfo.originNode.begin() + originIndex);
+			if (originIndex < matchInfo.originNode.size())
+				originPtr = matchInfo.originNode[originIndex];
+			else {
+				ending = true;
+				break;
+			}
+		}
+		while (matchInfo.goldenState.find(goldenPtr) != matchInfo.goldenState.end() && matchInfo.goldenState[goldenPtr] == false) {
+			matchInfo.goldenNode.erase(matchInfo.goldenNode.begin() + goldenIndex);
+			if (goldenIndex < matchInfo.goldenNode.size())
+				goldenPtr = matchInfo.goldenNode[goldenIndex];
+			else {
+				ending = true;
+				break;
+			}
+		}
+		if (!ending) {
+			structureCompareOper(originPtr, goldenPtr, matchInfo);
+			originIndex++; goldenIndex++;
+		}
+		if (originIndex >= matchInfo.originNode.size() || goldenIndex >= matchInfo.goldenNode.size()) {
+			int minisize = matchInfo.originNode.size();
+			if (matchInfo.originNode.size() > matchInfo.goldenNode.size())
+				minisize = matchInfo.goldenNode.size();
+			while (matchInfo.originNode.size() > minisize) {
+				Node* ptr = matchInfo.originNode[matchInfo.originNode.size() - 1];
+				if (matchInfo.originState.find(ptr) != matchInfo.originState.end() && matchInfo.originState[ptr] == false)
+					matchInfo.originNode.pop_back();
+				else {
+					matchInfo.originState[ptr] = false;
+					matchInfo.originRemoveNode[ptr] = true;
+					matchInfo.originNode.pop_back();
+				}
+			}
+			while (matchInfo.goldenNode.size() > minisize) {
+				Node* ptr = matchInfo.goldenNode[matchInfo.goldenNode.size() - 1];
+				if (matchInfo.goldenState.find(ptr) != matchInfo.goldenState.end() && matchInfo.goldenState[ptr] == false)
+					matchInfo.goldenNode.pop_back();
+				else {
+					matchInfo.goldenState[ptr] = false;
+					matchInfo.goldenNode.pop_back();
+				}
+			}
+			break;
+		}
+	}
+	set<Node*>::iterator req = matchInfo.originSupprotSet.begin();
+	for (set<Node*>::iterator it = matchInfo.originSupprotSet.begin(); it != matchInfo.originSupprotSet.end();it=req) {
+		++req;
+		bool updates = true;
+		Node* accesses = *it;
+		for (int m = 0; m < accesses->fanout.size(); m++)
+			if (matchInfo.originRemoveNode.find(accesses->fanout[m]) != matchInfo.originRemoveNode.end()) {
+				updates = false;
+				break;
+			}
+		if (updates) {
+			for (int m = 0; m < accesses->fanout.size(); m++)
+				matchInfo.originSupprotSet.insert(accesses->fanout[m]);
+			matchInfo.originSupprotSet.erase(it);
+		}
+	}
+	req = matchInfo.goldenSupprotSet.begin();
+	for (set<Node*>::iterator it = matchInfo.goldenSupprotSet.begin(); it != matchInfo.goldenSupprotSet.end(); it = req) {
+		++req;
+		bool updates = true;
+		Node* accesses = *it;
+		for (int m = 0; m < accesses->fanout.size(); m++)
+			if (matchInfo.matches.find(accesses->fanout[m]) == matchInfo.matches.end()) {
+				updates = false;
+				break;
+			}
+		if (updates) {
+			for (int m = 0; m < accesses->fanout.size(); m++)
+				matchInfo.goldenSupprotSet.insert(accesses->fanout[m]);
+			matchInfo.goldenSupprotSet.erase(it);
+		}
+	}
+	/*for (int i = 0; i < matchInfo.originSupprotSet.size(); i++) {
+		Node* ptr = matchInfo.originSupprotSet[i];
+		bool updates = true;
+		for (int m = 0; m < ptr->fanout.size(); m++)
+			if (matchInfo.originRemoveNode.find(ptr->fanout[m]) != matchInfo.originRemoveNode.end()) {
+				updates = false;
+				break;
+			}
+		if (updates) {
+			matchInfo.originSupprotSet.erase(ptr);
+			for (int m = 0; m < ptr->fanout.size(); m++)
+				matchInfo.originSupprotSet.insert(ptr->fanout[m]);
+		}
+	}
+	for (int i = 0; i < matchInfo.goldenNode.size(); i++) {
+		Node* ptr = matchInfo.goldenNode[i];
+		bool updates = true;
+		for (int m = 0; m < ptr->fanout.size(); m++)
+			if (matchInfo.matches.find(ptr->fanout[m]) == matchInfo.matches.end()) {
+				updates = false;
+				break;
+			}
+		if (updates) {
+			matchInfo.goldenSupprotSet.erase(ptr);
+			for (int m = 0; m < ptr->fanout.size(); m++)
+				matchInfo.goldenSupprotSet.insert(ptr->fanout[m]);
+		}
+	}*/
+	int k = 0;
+}
+
+void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
+{
+	vector<Node*> originMatch;
+	vector<Node*> goldenMatch;
+	map<Node*, bool> usingOrigin;
+	map<Node*, bool> usingGolden;
+	for (int i = 0; i < origin->fanout.size(); i++) {
+		if (IsVisited(origin->fanout[i], matchInfo.originState)) 
+			continue;
+		if (IsFaninVisited(origin->fanout[i], matchInfo.originState)) {
+			originMatch.push_back(origin->fanout[i]);
+			matchInfo.originState[origin->fanout[i]] = true;
+			usingOrigin[origin->fanout[i]] = false;
+		}
+	}
+	for (int i = 0; i < golden->fanout.size(); i++) {
+		if (IsVisited(golden->fanout[i], matchInfo.goldenState))
+			continue;
+		if (IsFaninVisited(golden->fanout[i], matchInfo.goldenState)) {
+			goldenMatch.push_back(golden->fanout[i]);
+			matchInfo.goldenState[golden->fanout[i]] = true;
+			usingGolden[golden->fanout[i]] = false;
+		}
+	}
+	for (int i = 0; i < originMatch.size(); i++) {
+		Node* ptr1 = originMatch[i];
+		for (int m = 0; m < goldenMatch.size(); m++) {
+			Node* ptr2 = goldenMatch[m];
+			if (usingOrigin.find(ptr1) == usingOrigin.end() || usingGolden.find(ptr2) == usingGolden.end())
+				continue;
+			if (!IsGateTypeEqual(ptr1,ptr2))
+				continue;
+			if (!IsFaninEqual(ptr1,ptr2, matchInfo))
+				continue;
+			matchInfo.matches[ptr2] = ptr1;
+			usingOrigin.erase(ptr1);
+			usingGolden.erase(ptr2);
+		}
+	}
+	//remove in maps content
+	for (map<Node*, bool>::iterator it = usingOrigin.begin(); it != usingOrigin.end(); ++it) {
+		if (matchInfo.originState[it->first]) {
+			matchInfo.originState[it->first] = false;
+			matchInfo.originRemoveNode[it->first] = true;
+		}
+	}
+	for (map<Node*, bool>::iterator it = usingGolden.begin(); it != usingGolden.end(); ++it) {
+		if (matchInfo.goldenState[it->first]) {
+			matchInfo.goldenState[it->first] = false;
+		}
+	}
+}
+
+bool IsGateTypeEqual(Node* origin, Node* golden)
+{
+	int type1 = origin->type;
+	int type2 = golden->type;
+	if (origin->type == 8)
+		type1 = origin->realGate;
+	if (golden->type == 8)
+		type2 = golden->realGate;
+	if (type1 == type2)
+		return true;
+	return false;
+}
+
+
+bool IsFaninEqual(Node* origin, Node* golden, MatchInfo matchInfo)
+{
+	for (int i = 0; i < origin->fanin.size(); i++) {
+		for (int m = 0; m < golden->fanin.size(); m++) {
+			if (matchInfo.matches.find(golden->fanin[m]) != matchInfo.matches.end())
+				if (matchInfo.matches[golden->fanin[m]] == origin->fanin[i])
+					break;
+			if (m == golden->fanin.size() - 1)
+				return false;
+		}
+	}
+	return true;
+}
+
+bool IsFaninVisited(Node* ptr, map<Node*, bool> maps)
+{
+	for (int i = 0; i < ptr->fanin.size(); i++)
+		if (!IsVisited(ptr->fanin[i], maps))
+			return false;
+	return true;
+}
+
+bool IsVisited(Node* target, map<Node*, bool> maps)
+{
+	if (maps.find(target) != maps.end())
+		return true;
+	return false;
 }
 
 void graph2Blif(Graph& path)
