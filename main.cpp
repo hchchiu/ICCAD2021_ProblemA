@@ -23,6 +23,7 @@ struct Node
 	vector<Node*> fanin;
 	vector<Node*> fanout;
 	set <Node*> piset;
+	string graphName;
 	unsigned* seeds;
 	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
 	int realGate; // -1:default
@@ -34,6 +35,7 @@ struct Graph
 	vector< Node* > PI;
 	vector< Node* > PO;
 	map<string, Node*> PIMAP;
+	string name;
 };
 
 
@@ -48,7 +50,7 @@ void assignCommandTransform(string& verilog_command);
 // Record PI/PO node info
 void PiPoRecord(string str, Graph& graph);
 // Initialize new node
-Node* initialNewnode(string name, int type);
+Node* initialNewnode(string name, int type,string graphName);
 // Select gate type
 int selectGateType(string gate);
 
@@ -67,6 +69,10 @@ void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
 
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path_original, Graph& path_golden);
+
+void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*,bool>& visited);
+
+void node2Blif(ofstream& outfile,Node* currNode);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -107,9 +113,8 @@ bool seedIsDifferent(Node object, Node golden);
    ------------------------------------------
 	   ¡õ
    ------------------------------------------
-	graph2Blif  ¡÷  ???
+	graph2Blif  ¡÷  netlist2Blif  ¡÷  node2Blif
    ------------------------------------------
-
 */
 
 
@@ -121,10 +126,13 @@ int main(int argc, char* argv[])
 	srand(time(NULL));
 	//original netlist
 	Graph R1;
+	R1.name = "R1";
 	//golden netlist
 	Graph R2;
+	R2.name = "R2";
 	//optimize netlist
 	Graph G1;
+	G1.name = "G1";
 
 
 	//Load R1 original netlist
@@ -227,11 +235,18 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 
 		// search this whether exist
 		for (int i = 0; i < graph.netlist.size(); i++)
-			if (graph.netlist[i]->name == split_command) { isexist = true; scanNode = graph.netlist[i]; if (count)currGate = graph.netlist[i]; break; }
+			if (graph.netlist[i]->name == split_command) 
+			{ 
+				isexist = true; 
+				scanNode = graph.netlist[i]; 
+				if (count)
+					currGate = graph.netlist[i]; 
+				break; 
+			}
 
 
 		if (!isexist) {  // not exist
-			Node* req = initialNewnode(split_command, -1);
+			Node* req = initialNewnode(split_command, -1,graph.name);
 			graph.netlist.push_back(req);
 			if (count) {  //first node
 				currGate = req;
@@ -245,7 +260,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 				if (currGate->fanin.size() == 2) {
 					Node* n1 = currGate->fanin[0];
 					Node* n2 = currGate->fanin[1];
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type,graph.name);
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -277,7 +292,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 				if (currGate->fanin.size() == 2) {
 					Node* n1 = currGate->fanin[0];
 					Node* n2 = currGate->fanin[1];
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type,graph.name);
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -344,6 +359,7 @@ void PiPoRecord(string str, Graph& graph)
 				else if (type == "output") {
 					req->type = 10;
 					req->seeds = new unsigned[nWords];
+					req->graphName = graph.name;
 					graph.netlist.push_back(req);
 					graph.PO.push_back(req);
 				}
@@ -371,6 +387,7 @@ void PiPoRecord(string str, Graph& graph)
 			else if (type == "output") {
 				req->type = 10;
 				req->seeds = new unsigned[nWords];
+				req->graphName = graph.name;
 				graph.netlist.push_back(req);
 				graph.PO.push_back(req);
 			}
@@ -391,12 +408,13 @@ int selectGateType(string gate)
 	else if (gate == "input")return 9;
 	else if (gate == "output")return 10;
 }
-Node* initialNewnode(string name, int type) {
+Node* initialNewnode(string name, int type, string graphName) {
 	Node* newnode = new Node();
 	newnode->name = name;
 	newnode->realGate = -1;
 	newnode->type = type;
 	newnode->seeds = new unsigned[nWords];
+	newnode->graphName = graphName;
 	return newnode;
 }
 
@@ -460,7 +478,7 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 	}
 	Stack.push(node);
 }
-void setNodePIsetandSeed  (Graph& graph)
+void setNodePIsetandSeed(Graph& graph)
 {
 	for (int i = 0; i < graph.netlist.size(); ++i) {
 		Node* currNode = graph.netlist[i];
@@ -490,39 +508,31 @@ void BitWiseOperation(vector<unsigned*>& faninSeed, Node* currNode)
 
 	if (faninSeed.size() > 1) {
 		//and gate
-		if (type == 1) {
+		if (type == 1)
 			for (int i = 0; i < nWords; ++i) currNode-> seeds[i] = faninSeed[0][i] & faninSeed[1][i];
-		}
 		//or gate
-		else if (type == 2) {
+		else if (type == 2)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] | faninSeed[1][i];
-		}
 		//nand gate
-		else if (type == 3) {
+		else if (type == 3)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~(faninSeed[0][i] & faninSeed[1][i]);
-		}
 		//nor gate
-		else if (type == 4) {
+		else if (type == 4)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~(faninSeed[0][i] | faninSeed[1][i]);
-		}
 		//xor gate
-		else if (type == 5) {
+		else if (type == 5)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] ^ faninSeed[1][i];
-		}
 		//xnor gate
-		else if (type == 6) {
+		else if (type == 6)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~(faninSeed[0][i] ^ faninSeed[1][i]);
-		}
 	}
 	else{
 		//not gate
-		if (type == 0) {
+		if (type == 0) 
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~faninSeed[0][i];
-		}
 		//buffer or assign
-		else if (type == 7 || type == 8) {
+		else if (type == 7 || type == 8) 
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] ;
-		}
 	}
 }
 
@@ -551,8 +561,8 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//write -> ".inputs ..."
 	outfile << ".inputs";
 	for (int i = 0; i < path_original.PI.size(); ++i) {
-		outfile << " " << path_original.PI[i]->name + "_og" ;
-		outfile << " " << path_golden.PI[i]->name + "_gd";
+		outfile << " " << path_original.PI[i]->name + "_G1" ;
+		outfile << " " << path_golden.PI[i]->name + "_R2";
 	}
 	outfile << endl;
 	
@@ -564,18 +574,94 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//we can modify the topological sort pi oder
 	//that we can code here easier
 	map<Node*, bool> visited;
-	for (int i = 0; i < path_original.netlist.size(); ++i) {
+	for (int i = 0; i < path_original.netlist.size(); ++i) 
 		visited[path_original.netlist[i]] = false;
-	}
-	for (int i = 0; i < path_golden.netlist.size(); ++i) {
+
+	for (int i = 0; i < path_golden.netlist.size(); ++i) 
 		visited[path_golden.netlist[i]] = false;
-	}
-	
 
-
-
+	//visit original pi fanout node
+	//write blif
+	//some order question ???
+	netlist2Blif(outfile, path_original.PI, visited);
+	//golden pi
+	netlist2Blif(outfile, path_golden.PI, visited);
+	//original netlist
+	netlist2Blif(outfile, path_original.netlist, visited);
+	//golden netlist
+	netlist2Blif(outfile, path_golden.netlist, visited);
 
 	outfile.close();
+}
+void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*, bool>& visited)
+{
+	for (int i = 0; i < netlist.size(); ++i) {
+		for (int j = 0; j < netlist[i]->fanout.size(); ++j) {
+			if (!visited[netlist[i]->fanout[j]]) {
+				node2Blif(outfile, netlist[i]->fanout[j]);
+				visited[netlist[i]->fanout[j]] = true;
+			}
+		}
+	}
+}
+void node2Blif(ofstream& outfile, Node* currNode)
+{
+	//0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
+	int type;
+	if (currNode->type == 10 || currNode->type == 9)
+		type = currNode->realGate;
+	else
+		type = currNode->type;
+
+	//write -> ".names ..."
+	cout<< ".names"
+		<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
+		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
+		<< " " << currNode->name + "_" + currNode->graphName << endl;
+
+	outfile << ".names"
+			<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
+			<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
+			<< " " << currNode->name + "_" + currNode->graphName<<endl;
+
+	if (currNode->fanin.size() > 1) {
+		//and gate
+		if (type == 1)
+			outfile << "11 1"<<endl;
+		//or gate
+		else if (type == 2)
+			outfile << "-1 1" << endl
+					<< "1- 1" << endl;
+		//nand gate
+		else if (type == 3) {
+			outfile << "0- 1" << endl
+					<< "10 1" << endl;
+		}
+		//nor gate
+		else if (type == 4) {
+			outfile << "00 1" << endl;
+		}
+		//xor gate
+		else if (type == 5) {
+			outfile << "01 1" << endl
+					<< "10 1" << endl;
+		}
+		//xnor gate
+		else if (type == 6) {
+			outfile << "00 1" << endl
+					<< "11 1" << endl;
+		}
+	}
+	else {
+		//not gate
+		if (type == 0) {
+			outfile << "0 1" << endl;
+		}
+		//buffer or assign
+		else if (type == 7 || type == 8) {
+			outfile << "1 1" << endl;
+		}
+	}
 }
 
 /*
