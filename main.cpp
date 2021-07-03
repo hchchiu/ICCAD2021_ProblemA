@@ -66,7 +66,7 @@ unsigned* getRandomSeed();
 void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
 
 //transfer graph to blif file and write blif file
-void graph2Blif(Graph& path);
+void graph2Blif(Graph& path_original, Graph& path_golden);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -105,6 +105,11 @@ bool seedIsDifferent(Node object, Node golden);
    ------------------------------------------
 	setNodePIsetandSeed  ¡÷  BitWiseOperation
    ------------------------------------------
+	   ¡õ
+   ------------------------------------------
+	graph2Blif  ¡÷  ???
+   ------------------------------------------
+
 */
 
 
@@ -147,6 +152,7 @@ int main(int argc, char* argv[])
 	setNodePIsetandSeed  (G1);
 	//outFile(R2, argv[4]);
 
+	graph2Blif(G1, R2);
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -533,9 +539,9 @@ unsigned* getRandomSeed()
 	return bw;
 }
 
-void graph2Blif(Graph& path)
+void graph2Blif(Graph& path_original, Graph& path_golden)
 {
-	//we need to make sure input data structure
+	//we need to make sure the structure of input data 
 	//...
 
 	ofstream outfile("check.blif");
@@ -543,11 +549,33 @@ void graph2Blif(Graph& path)
 	outfile << ".model check" << endl;
 
 	//write -> ".inputs ..."
-	//...
+	outfile << ".inputs";
+	for (int i = 0; i < path_original.PI.size(); ++i) {
+		outfile << " " << path_original.PI[i]->name + "_og" ;
+		outfile << " " << path_golden.PI[i]->name + "_gd";
+	}
+	outfile << endl;
+	
 	//write -> ".outputs ..."
-	//...
+	outfile << ".outputs " << "output";
+	outfile << endl;
+
 	//write -> ".names ..."
-	//...
+	//we can modify the topological sort pi oder
+	//that we can code here easier
+	map<Node*, bool> visited;
+	for (int i = 0; i < path_original.netlist.size(); ++i) {
+		visited[path_original.netlist[i]] = false;
+	}
+	for (int i = 0; i < path_golden.netlist.size(); ++i) {
+		visited[path_golden.netlist[i]] = false;
+	}
+	
+
+
+
+
+	outfile.close();
 }
 
 /*
