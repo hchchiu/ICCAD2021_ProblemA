@@ -21,7 +21,7 @@
 
 
 ## To Do List
-- [O] 利用Graph的Netlist做Structure Compare
+- [X] 利用Graph的Netlist做Structure Compare
 - [ ] 利用Random Simulation做Compare
 - [ ] 利用SAT做Compare
 
