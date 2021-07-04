@@ -91,6 +91,7 @@ bool IsFaninVisited(Node* ptr, map<Node*, bool> maps);
 // check this node whether visited or not
 bool IsVisited(Node* target, map<Node*, bool>maps);
 
+
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path_original, Graph& path_golden);
 //find the node's fanout and call node2Blif 
@@ -334,6 +335,10 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 					Node* n1 = currGate->fanin[0];
 					Node* n2 = currGate->fanin[1];
 					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type, graph.name);
+
+					//modify
+					if (newnode->type == 9 || newnode->type == 10)
+						newnode->realGate = currGate->realGate;
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -392,7 +397,7 @@ void PiPoRecord(string str, Graph& graph)
 					graph.PIMAP[req->name] = req;
 					req->type = 9;
 					req->seeds = new unsigned[nWords];
-					;					graph.netlist.push_back(req);
+					graph.netlist.push_back(req);
 					graph.PI.push_back(req);
 					//req->piset.push_back(req);
 					req->piset.insert(req);
@@ -835,8 +840,7 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//write -> ".inputs ..."
 	outfile << ".inputs";
 	for (int i = 0; i < path_original.PI.size(); ++i) {
-		outfile << " " << path_original.PI[i]->name + "_G1";
-		outfile << " " << path_golden.PI[i]->name + "_R2";
+		outfile << " " << path_original.PI[i]->name;
 	}
 	outfile << endl;
 
@@ -890,15 +894,23 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		type = currNode->type;
 
 	//write -> ".names ..."
-	cout << ".names"
+	/*cout << ".names"
 		<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
 		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
-		<< " " << currNode->name + "_" + currNode->graphName << endl;
+		<< " " << currNode->name + "_" + currNode->graphName << endl;*/
 
-	outfile << ".names"
-		<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
-		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
-		<< " " << currNode->name + "_" + currNode->graphName << endl;
+	outfile << ".names" << " " << currNode->fanin[0]->name;
+	if (currNode->fanin[0]->type != 9)
+		outfile << "_" + currNode->graphName;
+	if (currNode->fanin.size() > 1) {
+		outfile << " " << currNode->fanin[1]->name;
+		if (currNode->fanin[1]->type != 9)
+			outfile << "_" + currNode->graphName;
+	}
+	outfile<< " " << currNode->name;
+	if (currNode->type != 9)
+		outfile << "_" + currNode->graphName;
+	outfile << endl;
 
 	if (currNode->fanin.size() > 1) {
 		//and gate
