@@ -7,6 +7,6 @@ module top(a, b, c, y);
   nor g3 (g3, b, c);
   and g4 (g4, g1, g2);
   or g5 (g5, g1, g3);
-  and g6 (g6, g4, g5);
+  and y (y, g4, g5);
 endmodule
 

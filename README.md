@@ -26,3 +26,8 @@
 - [ ] 利用Random Simulation做Compare
 - [ ] 利用SAT做Compare
 
+
+## 執行abc
+```bash
+./src/...exe filename 
+```
