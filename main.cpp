@@ -23,7 +23,7 @@ struct Node
 	vector<Node*> fanin;
 	vector<Node*> fanout;
 	set <Node*> piset;
-	string graphName;
+	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
 	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
 	int realGate; // -1:default
@@ -34,8 +34,8 @@ struct Graph
 	vector< Node* > netlist;
 	vector< Node* > PI;
 	vector< Node* > PO;
-	map<string, Node*> PIMAP;
-	string name;
+	map<string, Node*> PIMAP;//use PI's name to find its pointer
+	string name;//Graph name :R1,R2,G1
 };
 
 
@@ -62,15 +62,18 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 void setNodePIsetandSeed  (Graph& graph);
 //Set the random seed
 void setRandomSeed(Graph& R1, Graph& R2, Graph& G1);
-// return random seed
+//return random seed
 unsigned* getRandomSeed();
 //BitWiseOperation
 void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
 
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path_original, Graph& path_golden);
+//find the node's fanout and call node2Blif 
 void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*,bool>& visited);
+//write gate type ex: and gate -> 11 1
 void node2Blif(ofstream& outfile,Node* currNode);
+//let original POs and Golden POs connet to the XOR to make the miter
 void buildMiter(ofstream& outfile, vector<Node*>& PO_original,vector<Node*>PO_golden);
 
 // Output patch
@@ -113,6 +116,7 @@ bool seedIsDifferent(Node object, Node golden);
 	   ¡õ
    ------------------------------------------
 	graph2Blif  ¡÷  netlist2Blif  ¡÷  node2Blif
+		.		¡÷  buildMiter
    ------------------------------------------
 */
 
