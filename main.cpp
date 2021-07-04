@@ -39,9 +39,10 @@ struct MatchInfo
 	map<Node*, Node*> matches; //success match pair (golden,origin)
 	map<Node*, bool> originState; //(in this map represent it visited , true represent still in NodeSet)
 	map<Node*, bool> goldenState; //(in this map represent it visited , true represent still in NodeSet)
-	vector<Node*> originNode; //the remains is need to save
-	map<Node*, bool> originRemoveNode; //the content node is needed to remove
-	vector<Node*> goldenNode; //the remains is need to create to origin
+	vector<Node*> originNode; //the remains is matched node need to save
+	map<Node*, bool> originRemoveNode; //the content node is not match in origin and needed to remove from origin
+	map<Node*, bool> goldenRemoveNode; //the content node is not match in golden and needed to create into origin
+	vector<Node*> goldenNode; //the remains is matched
 	set<Node*> originSupprotSet; //record support set
 	set<Node*> goldenSupprotSet; //record support set
 };
@@ -151,7 +152,7 @@ int main(int argc, char* argv[])
 
 	MatchInfo matchInfo;
 	structureCompareMain(G1, R2, matchInfo);
-
+	int k = 0;
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -601,6 +602,7 @@ void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
 					matchInfo.goldenNode.pop_back();
 				else {
 					matchInfo.goldenState[ptr] = false;
+					matchInfo.goldenRemoveNode[ptr] = true;
 					matchInfo.goldenNode.pop_back();
 				}
 			}
@@ -719,6 +721,7 @@ void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
 	for (map<Node*, bool>::iterator it = usingGolden.begin(); it != usingGolden.end(); ++it) {
 		if (matchInfo.goldenState[it->first]) {
 			matchInfo.goldenState[it->first] = false;
+			matchInfo.goldenRemoveNode[it->first] = true;
 		}
 	}
 }
