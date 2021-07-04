@@ -28,6 +28,9 @@
 	- [新增]  `buildMiter`，把Original和Golden的對應的PO接到XOR做Miter
 	- [新增]  `struct` `Graph`，加入name紀錄屬於R1 or R2 or G1
 	- [新增]  `struct` `Node`，加入name紀錄屬於R1 or R2 or G1
+- 2021/07/04 20:50
+	- [修改]	`verilog2Graph`，分成2 fanin gate時realgate沒有更改值
+	- [修改]	`node2Blif`，PI應該都是一樣不需要加tag，新增assign判斷
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
 - [ ] 利用Random Simulation做Compare
