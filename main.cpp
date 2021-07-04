@@ -60,7 +60,7 @@ void assignCommandTransform(string& verilog_command);
 // Record PI/PO node info
 void PiPoRecord(string str, Graph& graph);
 // Initialize new node
-Node* initialNewnode(string name, int type,string graphName);
+Node* initialNewnode(string name, int type, string graphName);
 // Select gate type
 int selectGateType(string gate);
 
@@ -82,23 +82,23 @@ void BitWiseOperation(vector<unsigned*>& fainSeed, Node* currNode);
 void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo);
 // structure compare operation
 void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo);
-//
+// check gate is equal
 bool IsGateTypeEqual(Node* origin, Node* golden);
-// 
+// check fanin is equal
 bool IsFaninEqual(Node* origin, Node* golden, MatchInfo matchInfo);
-// 
+// check this node fanin whether visited or not
 bool IsFaninVisited(Node* ptr, map<Node*, bool> maps);
-// Confirm is visited
+// check this node whether visited or not
 bool IsVisited(Node* target, map<Node*, bool>maps);
 
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path_original, Graph& path_golden);
 //find the node's fanout and call node2Blif 
-void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*,bool>& visited);
+void netlist2Blif(ofstream& outfile, vector<Node*>& netlist, map<Node*, bool>& visited);
 //write gate type ex: and gate -> 11 1
-void node2Blif(ofstream& outfile,Node* currNode);
+void node2Blif(ofstream& outfile, Node* currNode);
 //let original POs and Golden POs connet to the XOR to make the miter
-void buildMiter(ofstream& outfile, vector<Node*>& PO_original,vector<Node*>PO_golden);
+void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_golden);
 
 
 // Output patch
@@ -121,27 +121,36 @@ bool seedIsDifferent(Node object, Node golden);
 
 /* Function Flow
    ----------------------------------------------------------
-	loadFile  ¡÷   verilog2graph  ¡÷   assignCommandTransform 
-						.		  ¡÷   initialNewnode
-						.         ¡÷   selectGateType
-						.         ¡÷   PiPoRecord
+ loadFile  ->   verilog2graph  ->   assignCommandTransform
+	  .    ->   initialNewnode
+	  .         ->   selectGateType
+	  .         ->   PiPoRecord
    ----------------------------------------------------------
-	   ¡õ
+	|
    ----------------------------------
-	setRandomSeed  ¡÷   getRandomSeed
+ setRandomSeed  ->   getRandomSeed
    ----------------------------------
-	   ¡õ
+	|
    -----------------------------------------
-	topologicalSort  ¡÷  topologicalSortUtil
+ topologicalSort  ->  topologicalSortUtil
    -----------------------------------------
-	   ¡õ
+	|
    ------------------------------------------
-	setNodePIsetandSeed  ¡÷  BitWiseOperation
+ setNodePIsetandSeed  ->  BitWiseOperation
    ------------------------------------------
-	   ¡õ
+	|
    ------------------------------------------
-	graph2Blif  ¡÷  netlist2Blif  ¡÷  node2Blif
-		.		¡÷  buildMiter
+ structureCompareMain  ->   structureCompareOper
+			.		   ->	IsGateTypeEqual
+			.		   ->	IsFaninEqual
+			.		   ->	IsFaninVisited
+								  .			->	IsVisited
+			.		   ->	IsVisited
+   ----------------------------------
+	|
+   -----------------------------------------
+ graph2Blif  ->  netlist2Blif  ->  node2Blif
+  .  ->  buildMiter
    ------------------------------------------
 */
 
@@ -269,18 +278,18 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 
 		// search this whether exist
 		for (int i = 0; i < graph.netlist.size(); i++)
-			if (graph.netlist[i]->name == split_command) 
-			{ 
-				isexist = true; 
-				scanNode = graph.netlist[i]; 
+			if (graph.netlist[i]->name == split_command)
+			{
+				isexist = true;
+				scanNode = graph.netlist[i];
 				if (count)
-					currGate = graph.netlist[i]; 
-				break; 
+					currGate = graph.netlist[i];
+				break;
 			}
 
 
 		if (!isexist) {  // not exist
-			Node* req = initialNewnode(split_command, -1,graph.name);
+			Node* req = initialNewnode(split_command, -1, graph.name);
 			graph.netlist.push_back(req);
 			if (count) {  //first node
 				currGate = req;
@@ -294,7 +303,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 				if (currGate->fanin.size() == 2) {
 					Node* n1 = currGate->fanin[0];
 					Node* n2 = currGate->fanin[1];
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type,graph.name);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type, graph.name);
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -326,7 +335,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 				if (currGate->fanin.size() == 2) {
 					Node* n1 = currGate->fanin[0];
 					Node* n2 = currGate->fanin[1];
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type,graph.name);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currGate->type, graph.name);
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -543,7 +552,7 @@ void BitWiseOperation(vector<unsigned*>& faninSeed, Node* currNode)
 	if (faninSeed.size() > 1) {
 		//and gate
 		if (type == 1)
-			for (int i = 0; i < nWords; ++i) currNode-> seeds[i] = faninSeed[0][i] & faninSeed[1][i];
+			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] & faninSeed[1][i];
 		//or gate
 		else if (type == 2)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] | faninSeed[1][i];
@@ -562,11 +571,11 @@ void BitWiseOperation(vector<unsigned*>& faninSeed, Node* currNode)
 	}
 	else {
 		//not gate
-		if (type == 0) 
+		if (type == 0)
 			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = ~faninSeed[0][i];
 		//buffer or assign
-		else if (type == 7 || type == 8) 
-			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i] ;
+		else if (type == 7 || type == 8)
+			for (int i = 0; i < nWords; ++i) currNode->seeds[i] = faninSeed[0][i];
 
 	}
 }
@@ -589,8 +598,8 @@ void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
 {
 	for (int i = 0; i < golden.PI.size(); i++) {
 		// put (golden , origin) PI in matches 
-		matchInfo.matches[golden.PI[i]] = origin.PI[i]; 
-		matchInfo.originState[origin.PI[i]] = true; 
+		matchInfo.matches[golden.PI[i]] = origin.PI[i];
+		matchInfo.originState[origin.PI[i]] = true;
 		matchInfo.goldenState[golden.PI[i]] = true;
 		matchInfo.originSupprotSet.insert(origin.PI[i]);
 		matchInfo.goldenSupprotSet.insert(golden.PI[i]);
@@ -656,7 +665,7 @@ void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
 		}
 	}
 	set<Node*>::iterator req = matchInfo.originSupprotSet.begin();
-	for (set<Node*>::iterator it = matchInfo.originSupprotSet.begin(); it != matchInfo.originSupprotSet.end();it=req) {
+	for (set<Node*>::iterator it = matchInfo.originSupprotSet.begin(); it != matchInfo.originSupprotSet.end(); it = req) {
 		++req;
 		bool updates = true;
 		Node* accesses = *it;
@@ -725,7 +734,7 @@ void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
 	map<Node*, bool> usingOrigin;
 	map<Node*, bool> usingGolden;
 	for (int i = 0; i < origin->fanout.size(); i++) {
-		if (IsVisited(origin->fanout[i], matchInfo.originState)) 
+		if (IsVisited(origin->fanout[i], matchInfo.originState))
 			continue;
 		if (IsFaninVisited(origin->fanout[i], matchInfo.originState)) {
 			originMatch.push_back(origin->fanout[i]);
@@ -748,9 +757,9 @@ void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
 			Node* ptr2 = goldenMatch[m];
 			if (usingOrigin.find(ptr1) == usingOrigin.end() || usingGolden.find(ptr2) == usingGolden.end())
 				continue;
-			if (!IsGateTypeEqual(ptr1,ptr2))
+			if (!IsGateTypeEqual(ptr1, ptr2))
 				continue;
-			if (!IsFaninEqual(ptr1,ptr2, matchInfo))
+			if (!IsFaninEqual(ptr1, ptr2, matchInfo))
 				continue;
 			matchInfo.matches[ptr2] = ptr1;
 			usingOrigin.erase(ptr1);
@@ -828,11 +837,11 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//write -> ".inputs ..."
 	outfile << ".inputs";
 	for (int i = 0; i < path_original.PI.size(); ++i) {
-		outfile << " " << path_original.PI[i]->name + "_G1" ;
+		outfile << " " << path_original.PI[i]->name + "_G1";
 		outfile << " " << path_golden.PI[i]->name + "_R2";
 	}
 	outfile << endl;
-	
+
 	//write -> ".outputs ..."
 	outfile << ".outputs " << "output";
 	outfile << endl;
@@ -841,10 +850,10 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//we can modify the topological sort pi oder
 	//that we can code here easier
 	map<Node*, bool> visited;
-	for (int i = 0; i < path_original.netlist.size(); ++i) 
+	for (int i = 0; i < path_original.netlist.size(); ++i)
 		visited[path_original.netlist[i]] = false;
 
-	for (int i = 0; i < path_golden.netlist.size(); ++i) 
+	for (int i = 0; i < path_golden.netlist.size(); ++i)
 		visited[path_golden.netlist[i]] = false;
 
 	//visit original pi fanout node
@@ -862,7 +871,7 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	outfile << ".end";
 	outfile.close();
 }
-void netlist2Blif(ofstream& outfile,vector<Node*>& netlist, map<Node*, bool>& visited)
+void netlist2Blif(ofstream& outfile, vector<Node*>& netlist, map<Node*, bool>& visited)
 {
 	for (int i = 0; i < netlist.size(); ++i) {
 		for (int j = 0; j < netlist[i]->fanout.size(); ++j) {
@@ -883,28 +892,28 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		type = currNode->type;
 
 	//write -> ".names ..."
-	cout<< ".names"
+	cout << ".names"
 		<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
 		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
 		<< " " << currNode->name + "_" + currNode->graphName << endl;
 
 	outfile << ".names"
-			<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
-			<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
-			<< " " << currNode->name + "_" + currNode->graphName<<endl;
+		<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
+		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
+		<< " " << currNode->name + "_" + currNode->graphName << endl;
 
 	if (currNode->fanin.size() > 1) {
 		//and gate
 		if (type == 1)
-			outfile << "11 1"<<endl;
+			outfile << "11 1" << endl;
 		//or gate
 		else if (type == 2)
 			outfile << "-1 1" << endl
-					<< "1- 1" << endl;
+			<< "1- 1" << endl;
 		//nand gate
 		else if (type == 3) {
 			outfile << "0- 1" << endl
-					<< "10 1" << endl;
+				<< "10 1" << endl;
 		}
 		//nor gate
 		else if (type == 4) {
@@ -913,12 +922,12 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		//xor gate
 		else if (type == 5) {
 			outfile << "01 1" << endl
-					<< "10 1" << endl;
+				<< "10 1" << endl;
 		}
 		//xnor gate
 		else if (type == 6) {
 			outfile << "00 1" << endl
-					<< "11 1" << endl;
+				<< "11 1" << endl;
 		}
 	}
 	else {
@@ -934,7 +943,7 @@ void node2Blif(ofstream& outfile, Node* currNode)
 }
 void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_golden)
 {
-	vector<Node*> PO_goldenTemp=PO_golden;
+	vector<Node*> PO_goldenTemp = PO_golden;
 	vector<string> miter;
 	for (int i = 0; i < PO_original.size(); ++i) {
 		for (int j = 0; j < PO_goldenTemp.size(); ++j) {
@@ -942,12 +951,12 @@ void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_g
 				outfile << ".names";
 				//outfile .names ...
 				outfile << " " << PO_original[i]->name + "_" + PO_original[i]->graphName
-						<<" "<< PO_goldenTemp[i]->name + "_" + PO_goldenTemp[i]->graphName
-						<< " " << "miter_"+ to_string(i)<<endl;
+					<< " " << PO_goldenTemp[i]->name + "_" + PO_goldenTemp[i]->graphName
+					<< " " << "miter_" + to_string(i) << endl;
 				//outfile xor gate
 				outfile << "01 1" << endl
-						<< "10 1" << endl;
-				PO_goldenTemp.erase(PO_goldenTemp.begin()+j);
+					<< "10 1" << endl;
+				PO_goldenTemp.erase(PO_goldenTemp.begin() + j);
 
 				miter.push_back("miter_" + to_string(i));
 			}
@@ -956,7 +965,7 @@ void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_g
 	//need to add
 	for (int i = 0; i < miter.size(); ++i) {
 		outfile << ".names " << miter[i] << " output" << endl;
-		outfile << "1 1"<<endl;
+		outfile << "1 1" << endl;
 	}
 }
 
