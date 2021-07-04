@@ -120,37 +120,35 @@ bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node object, Node golden);
 
 /* Function Flow
+    ----------------------------------------------------------
+	loadFile  ->   verilog2graph  ->   assignCommandTransform 
+						.		  ->   initialNewnode
+						.         ->   selectGateType
+						.         ->   PiPoRecord
    ----------------------------------------------------------
- loadFile  ->   verilog2graph  ->   assignCommandTransform
-	  .    ->   initialNewnode
-	  .         ->   selectGateType
-	  .         ->   PiPoRecord
-   ----------------------------------------------------------
-	|
+	   |
    ----------------------------------
- setRandomSeed  ->   getRandomSeed
+	setRandomSeed  ->   getRandomSeed
    ----------------------------------
-	|
+	   |
    -----------------------------------------
- topologicalSort  ->  topologicalSortUtil
+	topologicalSort  ->  topologicalSortUtil
    -----------------------------------------
-	|
+	   |
    ------------------------------------------
- setNodePIsetandSeed  ->  BitWiseOperation
+	setNodePIsetandSeed  ->  BitWiseOperation
    ------------------------------------------
-	|
-   ------------------------------------------
- structureCompareMain  ->   structureCompareOper
-			.		   ->	IsGateTypeEqual
-			.		   ->	IsFaninEqual
-			.		   ->	IsFaninVisited
-								  .			->	IsVisited
-			.		   ->	IsVisited
-   ----------------------------------
-	|
+	   |
+   ------------------------------------------------------------------------------------
+	structureCompareMain  ->   structureCompareOper	 ->  IsGateTypeEqual
+										.		     ->  IsFaninEqual
+										.		     ->  IsVisited
+										.		     ->  IsFaninVisited	 ->  IsVisited
+   ------------------------------------------------------------------------------------
+	   |
    -----------------------------------------
- graph2Blif  ->  netlist2Blif  ->  node2Blif
-  .  ->  buildMiter
+   graph2Blif  ->  netlist2Blif  ->  node2Blif
+		.	   ->  buildMiter
    ------------------------------------------
 */
 
