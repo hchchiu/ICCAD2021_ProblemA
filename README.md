@@ -17,9 +17,10 @@
 	- [新增]  `IsFaninEqual`，判斷Fanin是否相同
 	- [新增]  `IsFaninVisited`，判斷Fanin是否都走過
 	- [新增]  `IsVisited`，判斷是否走過
-
-
-
+- 2021/07/04 15:00
+	- [新增]  `MatchInfo struct`，新增`goldenRemoveNode`
+	- [新增]  `structureCompareMain`，修改`goldenRemoveNode`
+	- [新增]  `structureCompareOper`，修改`goldenRemoveNode`
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
 - [ ] 利用Random Simulation做Compare
