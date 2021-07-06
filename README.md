@@ -47,7 +47,13 @@ g++ -g -o blif2cnf.out blif2cnf.o ../libabc.a -lm -ldl -lreadline -lpthread
 ```bash
 ./src/.exe filename 
 ```
-## 執行minisat
+## minisat
+### Compile
+```bash
+make config prefix=$PREFIX(/home/usr/minisat)
+make install
+```
+### 執行
 ```bash
 export  LD_LIBRARY_PATH="/usr/local/lib" 
 ```
