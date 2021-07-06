@@ -123,8 +123,8 @@ bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node object, Node golden);
 
 /* Function Flow
-    ----------------------------------------------------------
-	loadFile  ->   verilog2graph  ->   assignCommandTransform 
+	----------------------------------------------------------
+	loadFile  ->   verilog2graph  ->   assignCommandTransform
 						.		  ->   initialNewnode
 						.         ->   selectGateType
 						.         ->   PiPoRecord
@@ -139,27 +139,20 @@ bool seedIsDifferent(Node object, Node golden);
    -----------------------------------------
 	   |
    ------------------------------------------
-
- setNodePIsetandSeed  ->  BitWiseOperation
-   ------------------------------------------
-	|
-   ------------------------------------------
- structureCompareMain  ->   structureCompareOper
-			.		   ->	IsGateTypeEqual
-			.		   ->	IsFaninEqual
-			.		   ->	IsFaninVisited
-								  .			->	IsVisited
-			.		   ->	IsVisited
-			.		   ->	removeAllFanout
-								  .			->	removeAllFanout
-   ----------------------------------
-	|
-   -----------------------------------------
- graph2Blif  ->  netlist2Blif  ->  node2Blif
-  .  ->  buildMiter
-
 	setNodePIsetandSeed  ->  BitWiseOperation
-
+   ------------------------------------------
+	   |
+   ------------------------------------------------------------------------------------------
+	structureCompareMain  ->   structureCompareOper  ->  IsGateTypeEqual
+										.		     ->  IsFaninEqual
+										.		     ->  IsVisited
+										.		     ->  IsFaninVisited	  ->  IsVisited
+										.		     ->  removeAllFanout  ->  removeAllFanout
+   ------------------------------------------------------------------------------------------
+	   |
+   -----------------------------------------
+	graph2Blif  ->  netlist2Blif  ->  node2Blif
+		.		->  buildMiter
    ------------------------------------------
 	   |
    ------------------------------------------------------------------------------------
@@ -798,7 +791,7 @@ void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
 			removeAllFanout(it->first, matchInfo.originState, matchInfo.originRemoveNode);
 	}
 	for (map<Node*, bool>::iterator it = usingGolden.begin(); it != usingGolden.end(); ++it) {
-		if (matchInfo.goldenState[it->first]) 
+		if (matchInfo.goldenState[it->first])
 			removeAllFanout(it->first, matchInfo.goldenState, matchInfo.goldenRemoveNode);
 	}
 }
@@ -845,7 +838,7 @@ bool IsFaninVisited(Node* ptr, map<Node*, bool> maps)
 
 bool IsVisited(Node* target, map<Node*, bool> maps)
 {
-	if (maps.find(target) != maps.end() || target->name=="1'b0" || target->name == "1'b1")
+	if (maps.find(target) != maps.end() || target->name == "1'b0" || target->name == "1'b1")
 		return true;
 	return false;
 }
@@ -896,9 +889,9 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	netlist2Blif(outfile, path_original.PI, visited);
 	//golden pi
 	netlist2Blif(outfile, path_golden.PI, visited);
-	//original netlist
+	//original netlist -> G1
 	netlist2Blif(outfile, path_original.netlist, visited);
-	//golden netlist
+	//golden netlist -> R2
 	netlist2Blif(outfile, path_golden.netlist, visited);
 
 	buildMiter(outfile, path_original.PO, path_golden.PO);
@@ -939,7 +932,7 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		if (currNode->fanin[1]->type != 9)
 			outfile << "_" + currNode->graphName;
 	}
-	outfile<< " " << currNode->name;
+	outfile << " " << currNode->name;
 	if (currNode->type != 9)
 		outfile << "_" + currNode->graphName;
 	outfile << endl;
@@ -949,9 +942,10 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		if (type == 1)
 			outfile << "11 1" << endl;
 		//or gate
-		else if (type == 2)
+		else if (type == 2) {
 			outfile << "-1 1" << endl
-			<< "1- 1" << endl;
+				<< "1- 1" << endl;
+		}
 		//nand gate
 		else if (type == 3) {
 			outfile << "0- 1" << endl
@@ -992,9 +986,9 @@ void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_g
 			if (PO_original[i]->name == PO_goldenTemp[j]->name) {
 				outfile << ".names";
 				//outfile .names ...
-				outfile << " " << PO_original[i]->name + "_" + PO_original[i]->graphName
-					<< " " << PO_goldenTemp[i]->name + "_" + PO_goldenTemp[i]->graphName
-					<< " " << "miter_" + to_string(i) << endl;
+				outfile << " " << PO_original[i]->name + "_" + PO_original[i]->graphName;
+				outfile << " " << PO_goldenTemp[j]->name + "_" + PO_goldenTemp[j]->graphName;
+				outfile << " " << "miter_" + to_string(i) << endl;
 				//outfile xor gate
 				outfile << "01 1" << endl
 					<< "10 1" << endl;
