@@ -9,6 +9,11 @@
 #include<stack>
 #include<set>
 #include<algorithm>
+
+extern "C" {
+#include "main.h"
+}
+
 using namespace std;
 
 #define RANDOM_UNSIGNED ((((unsigned)rand()) << 24) ^ (((unsigned)rand()) << 12) ^ ((unsigned)rand()))
@@ -883,9 +888,7 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	for (int i = 0; i < path_golden.netlist.size(); ++i)
 		visited[path_golden.netlist[i]] = false;
 
-	//visit original pi fanout node
-	//write blif
-	//some order question ???
+	//original pi
 	netlist2Blif(outfile, path_original.PI, visited);
 	//golden pi
 	netlist2Blif(outfile, path_golden.PI, visited);
