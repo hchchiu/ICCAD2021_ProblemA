@@ -10,9 +10,6 @@
 #include<set>
 #include<algorithm>
 
-extern "C" {
-#include "main.h"
-}
 
 using namespace std;
 
@@ -128,7 +125,7 @@ bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node object, Node golden);
 
 /* Function Flow
-	----------------------------------------------------------
+	---------------------------------------------------------
 	loadFile  ->   verilog2graph  ->   assignCommandTransform
 						.		  ->   initialNewnode
 						.         ->   selectGateType
@@ -155,17 +152,10 @@ bool seedIsDifferent(Node object, Node golden);
 										.		     ->  removeAllFanout  ->  removeAllFanout
    ------------------------------------------------------------------------------------------
 	   |
-   -----------------------------------------
+   --------------------------------------------
 	graph2Blif  ->  netlist2Blif  ->  node2Blif
 		.		->  buildMiter
-   ------------------------------------------
-	   |
-   ------------------------------------------------------------------------------------
-	structureCompareMain  ->   structureCompareOper	 ->  IsGateTypeEqual
-										.		     ->  IsFaninEqual
-										.		     ->  IsVisited
-										.		     ->  IsFaninVisited	 ->  IsVisited
-   ------------------------------------------------------------------------------------
+   --------------------------------------------
 	   |
    -------------------------------------------
    graph2Blif  ->  netlist2Blif  ->  node2Blif
@@ -222,6 +212,7 @@ int main(int argc, char* argv[])
 	int k = 0;
 
 	graph2Blif(G1, R2);
+	system("/home/s1071512/ICCAD2021_ProblemA/./blif2cnf.out ./blif/check.blif");
 
 }
 
