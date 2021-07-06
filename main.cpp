@@ -95,15 +95,23 @@ bool IsVisited(Node* target, map<Node*, bool>maps);
 // when a node not match, removing all fanout
 void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& removed);
 
+//start Random Simulation
+void randomSimulation(MatchInfo& matchInfo);
+//create a path for SAT solver
+void createPath(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode);
+//check if this node's fanin is PI
+bool faninIsPI(Node* nextNode);
 
+//outputBlif
+void outputBlif(Node* originalNode, Node* goldenNode);
 //transfer graph to blif file and write blif file
-void graph2Blif(Graph& path_original, Graph& path_golden);
+void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode);
 //find the node's fanout and call node2Blif 
-void netlist2Blif(ofstream& outfile, vector<Node*>& netlist, map<Node*, bool>& visited);
+void netlist2Blif(ofstream& outfile, vector<Node*>& netlist);
 //write gate type ex: and gate -> 11 1
 void node2Blif(ofstream& outfile, Node* currNode);
 //let original POs and Golden POs connet to the XOR to make the miter
-void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_golden);
+void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden);
 
 
 // Output patch
@@ -122,7 +130,7 @@ bool strTitleCompare(const string& p1, const string& p2);
 
 void createRectifyPair(Graph& R2, Graph& G1);
 bool pisetIsDifferent(Node object, Node golden);
-bool seedIsDifferent(Node object, Node golden);
+bool seedIsDifferent(Node* origin, Node* golden);
 
 /* Function Flow
 	---------------------------------------------------------
@@ -155,12 +163,9 @@ bool seedIsDifferent(Node object, Node golden);
    --------------------------------------------
 	graph2Blif  ->  netlist2Blif  ->  node2Blif
 		.		->  buildMiter
+		.		->  call abc.exe
+		.		->  call minisat.exe
    --------------------------------------------
-	   |
-   -------------------------------------------
-   graph2Blif  ->  netlist2Blif  ->  node2Blif
-		.	   ->  buildMiter
-   -------------------------------------------
 */
 
 
@@ -211,7 +216,8 @@ int main(int argc, char* argv[])
 	structureCompareMain(G1, R2, matchInfo);
 	int k = 0;
 
-	graph2Blif(G1, R2);
+	randomSimulation(matchInfo);
+
 	system("/home/s1071512/ICCAD2021_ProblemA/./blif2cnf.out ./blif/check.blif");
 
 }
@@ -848,30 +854,94 @@ void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& rem
 			removeAllFanout(node->fanout[i], states, removed);
 }
 
-void graph2Blif(Graph& path_original, Graph& path_golden)
-
+void randomSimulation(MatchInfo& matchInfo)
 {
-	//we need to make sure the structure of input data 
-	//...
+	auto gd_it = matchInfo.goldenRemoveNode.begin();
+	auto og_it = matchInfo.originRemoveNode.begin();
+	for (; og_it != matchInfo.originRemoveNode.end(); ++og_it) {
+		gd_it = matchInfo.goldenRemoveNode.begin();
+		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
+			if (!seedIsDifferent(og_it->first, gd_it->first)) {
+				outputBlif(og_it->first, gd_it->first);
+			}
+		}
+	}
+}
 
+void createPath(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
+{
+	//check whether this node's fanin is PI or not
+	if (faninIsPI(nextNode))
+		node2Blif(outfile, nextNode);
+	else
+		internalNode.push_back(nextNode);
+
+	for (int i = 0; i < nextNode->fanin.size(); ++i) {
+		if (nextNode->fanin[i]->type != 9)
+			createPath(outfile, nextNode->fanin[i], internalNode);
+	}
+
+}
+
+bool seedIsDifferent(Node* origin, Node* golden)
+{
+	for (int i = 0; i < nWords; ++i) {
+		if (origin->seeds[i] != golden->seeds[i])
+			return true;
+	}
+	return false;
+}
+
+bool faninIsPI(Node* nextNode)
+{
+	for (int i = 0; i < nextNode->fanin.size(); ++i) {
+		if (nextNode->fanin[i]->type == 9) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void outputBlif(Node* originalNode, Node* goldenNode)
+{
 	ofstream outfile("./blif/check.blif");
 	//write -> ".model check"
 	outfile << ".model check" << endl;
 
 	//write -> ".inputs ..."
 	outfile << ".inputs";
-	for (int i = 0; i < path_original.PI.size(); ++i) {
-		outfile << " " << path_original.PI[i]->name;
+
+	for (const auto& it : originalNode->piset) {
+		outfile << " " << it->name;
+		//std::cout << it->name << " ";
 	}
 	outfile << endl;
-
+	/*
+	set<Node*>::iterator it = originalNode->piset.begin();
+	for (; it != originalNode->piset.end(); ++it) {
+		outfile << " " << (*it)->name;
+		cout << " " << (*it)->name;
+	}*/
 	//write -> ".outputs ..."
 	outfile << ".outputs " << "output";
 	outfile << endl;
 
+	graph2Blif(outfile, originalNode, goldenNode);
+	buildMiter(outfile, originalNode, goldenNode);
+	outfile << ".end";
+	outfile.close();
+}
+
+void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode)
+{
+	vector<Node*> internalNode;
+	createPath(outfile, originalNode, internalNode);
+	createPath(outfile, goldenNode, internalNode);
+
 	//write -> ".names ..."
 	//we can modify the topological sort pi oder
 	//that we can code here easier
+	/*
 	map<Node*, bool> visited;
 	for (int i = 0; i < path_original.netlist.size(); ++i)
 		visited[path_original.netlist[i]] = false;
@@ -884,25 +954,23 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//golden pi
 	netlist2Blif(outfile, path_golden.PI, visited);
 	//original netlist -> G1
-	netlist2Blif(outfile, path_original.netlist, visited);
+	netlist2Blif(outfile, path_original.netlist, visited);	*/
 	//golden netlist -> R2
-	netlist2Blif(outfile, path_golden.netlist, visited);
+	netlist2Blif(outfile, internalNode);
 
-	buildMiter(outfile, path_original.PO, path_golden.PO);
-	outfile << ".end";
-	outfile.close();
+	//build miter
+	//buildMiter(outfile,originalNode, goldenNode);
+
+	
 }
-void netlist2Blif(ofstream& outfile, vector<Node*>& netlist, map<Node*, bool>& visited)
+
+void netlist2Blif(ofstream& outfile, vector<Node*>& netlist)
 {
 	for (int i = 0; i < netlist.size(); ++i) {
-		for (int j = 0; j < netlist[i]->fanout.size(); ++j) {
-			if (!visited[netlist[i]->fanout[j]]) {
-				node2Blif(outfile, netlist[i]->fanout[j]);
-				visited[netlist[i]->fanout[j]] = true;
-			}
-		}
+		node2Blif(outfile, netlist[i]);
 	}
 }
+
 void node2Blif(ofstream& outfile, Node* currNode)
 {
 	//0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
@@ -971,9 +1039,10 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		}
 	}
 }
-void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_golden)
+
+void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden)
 {
-	vector<Node*> PO_goldenTemp = PO_golden;
+	/*vector<Node*> PO_goldenTemp = PO_golden;
 	vector<string> miter;
 	for (int i = 0; i < PO_original.size(); ++i) {
 		for (int j = 0; j < PO_goldenTemp.size(); ++j) {
@@ -991,20 +1060,24 @@ void buildMiter(ofstream& outfile, vector<Node*>& PO_original, vector<Node*>PO_g
 				miter.push_back("miter_" + to_string(i));
 			}
 		}
-	}
+	}*/
 	//need to add
-	for (int i = 0; i < miter.size(); ++i) {
-		outfile << ".names " << miter[i] << " output" << endl;
-		outfile << "1 1" << endl;
-	}
+	outfile << ".names";
+	outfile << " " << PO_original->name + "_" + PO_original->graphName;
+	outfile << " " << PO_golden->name + "_" + PO_golden->graphName;
+	outfile << " " << "miter_0" << endl;
+	//outfile xor gate
+	outfile << "01 1" << endl
+		<< "10 1" << endl;
+
+	outfile << ".names " << "miter_0" << " output" << endl;
+	outfile << "1 1" << endl;
+
 }
+
 
 
 /*
-void createRectifyPair(Graph& R2, Graph& G1)
-{
-	//for(int i=0;i<G1.PO.size();i++)
-}
 bool pisetIsDifferent(Node object, Node golden)
 {
 	map<string, bool> maps;
@@ -1017,14 +1090,9 @@ bool pisetIsDifferent(Node object, Node golden)
 			return true;
 	}
 	return false;
-}
-bool seedIsDifferent(Node object, Node golden)
-{
-	if (*object.seeds != *golden.seeds)
-		return true;
-	return false;
-}
-*/
+}*/
+
+
 
 void outFile(Graph graph, char* argv)
 {
