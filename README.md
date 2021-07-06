@@ -37,7 +37,13 @@
 - [ ] 利用SAT做Compare
 
 
-## 執行abc
+## abc
+### Compile 在src資料夾中
+```bash
+gcc -Wall -g -c check_blif.c -o blif2cnf.o
+g++ -g -o blif2cnf.out blif2cnf.o ../libabc.a -lm -ldl -lreadline -lpthread
+```
+### 執行
 ```bash
 ./src/.exe filename 
 ```
