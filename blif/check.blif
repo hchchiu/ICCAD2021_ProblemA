@@ -1,0 +1,40 @@
+.model check
+.inputs a b c
+.outputs output
+.names a b g1_G1
+11 1
+.names a c g2_G1
+01 1
+10 1
+.names b c g3_G1
+00 1
+.names a b g7_R2
+11 1
+.names a c g8_R2
+01 1
+10 1
+.names b c g9_R2
+11 1
+.names g1_G1 g3_G1 g5_G1
+-1 1
+1- 1
+.names g1_G1 g2_G1 g4_G1
+11 1
+.names g4_G1 g5_G1 y_G1
+11 1
+.names g10_R2 g9_R2 g11_R2
+-1 1
+1- 1
+.names g8_R2 g9_R2 g12_R2
+-1 1
+1- 1
+.names g7_R2 g8_R2 g10_R2
+11 1
+.names g11_R2 g12_R2 y_R2
+11 1
+.names y_G1 y_R2 miter_0
+01 1
+10 1
+.names miter_0 output
+1 1
+.end

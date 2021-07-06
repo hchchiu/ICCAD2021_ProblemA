@@ -854,7 +854,7 @@ void graph2Blif(Graph& path_original, Graph& path_golden)
 	//we need to make sure the structure of input data 
 	//...
 
-	ofstream outfile("check.blif");
+	ofstream outfile("./blif/check.blif");
 	//write -> ".model check"
 	outfile << ".model check" << endl;
 

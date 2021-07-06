@@ -175,7 +175,7 @@ clkResyn = clock() - clk;
         fprintf( stdout, "Cannot execute command \"%s\".\n", Command );
         return 1;
     }*/
-    sprintf( Command, "write_cnf check.cnf" );
+    sprintf( Command, "write_cnf ./cnf/check.cnf" );
     if ( Cmd_CommandExecute( pAbc, Command ) )
     {
         fprintf( stdout, "Cannot execute command \"%s\".\n", Command );
