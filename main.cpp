@@ -90,6 +90,8 @@ bool IsFaninEqual(Node* origin, Node* golden, MatchInfo matchInfo);
 bool IsFaninVisited(Node* ptr, map<Node*, bool> maps);
 // check this node whether visited or not
 bool IsVisited(Node* target, map<Node*, bool>maps);
+// when a node not match, removing all fanout
+void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& removed);
 
 //transfer graph to blif file and write blif file
 void graph2Blif(Graph& path_original, Graph& path_golden);
@@ -146,6 +148,8 @@ bool seedIsDifferent(Node object, Node golden);
 			.		   ->	IsFaninVisited
 								  .			->	IsVisited
 			.		   ->	IsVisited
+			.		   ->	removeAllFanout
+								  .			->	removeAllFanout
    ----------------------------------
 	|
    -----------------------------------------
@@ -733,6 +737,7 @@ void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
 	vector<Node*> goldenMatch;
 	map<Node*, bool> usingOrigin;
 	map<Node*, bool> usingGolden;
+
 	for (int i = 0; i < origin->fanout.size(); i++) {
 		if (IsVisited(origin->fanout[i], matchInfo.originState))
 			continue;
@@ -768,16 +773,12 @@ void structureCompareOper(Node* origin, Node* golden, MatchInfo& matchInfo)
 	}
 	//remove in maps content
 	for (map<Node*, bool>::iterator it = usingOrigin.begin(); it != usingOrigin.end(); ++it) {
-		if (matchInfo.originState[it->first]) {
-			matchInfo.originState[it->first] = false;
-			matchInfo.originRemoveNode[it->first] = true;
-		}
+		if (matchInfo.originState[it->first])
+			removeAllFanout(it->first, matchInfo.originState, matchInfo.originRemoveNode);
 	}
 	for (map<Node*, bool>::iterator it = usingGolden.begin(); it != usingGolden.end(); ++it) {
-		if (matchInfo.goldenState[it->first]) {
-			matchInfo.goldenState[it->first] = false;
-			matchInfo.goldenRemoveNode[it->first] = true;
-		}
+		if (matchInfo.goldenState[it->first]) 
+			removeAllFanout(it->first, matchInfo.goldenState, matchInfo.goldenRemoveNode);
 	}
 }
 
@@ -799,6 +800,10 @@ bool IsFaninEqual(Node* origin, Node* golden, MatchInfo matchInfo)
 {
 	for (int i = 0; i < origin->fanin.size(); i++) {
 		for (int m = 0; m < golden->fanin.size(); m++) {
+			if (origin->fanin[i]->name == "1'b1" && golden->fanin[i]->name == "1'b1")
+				break;
+			if (origin->fanin[i]->name == "1'b0" && golden->fanin[i]->name == "1'b0")
+				break;
 			if (matchInfo.matches.find(golden->fanin[m]) != matchInfo.matches.end())
 				if (matchInfo.matches[golden->fanin[m]] == origin->fanin[i])
 					break;
@@ -819,9 +824,18 @@ bool IsFaninVisited(Node* ptr, map<Node*, bool> maps)
 
 bool IsVisited(Node* target, map<Node*, bool> maps)
 {
-	if (maps.find(target) != maps.end())
+	if (maps.find(target) != maps.end() || target->name=="1'b0" || target->name == "1'b1")
 		return true;
 	return false;
+}
+
+void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& removed)
+{
+	states[node] = false;
+	removed[node] = true;
+	for (int i = 0; i < node->fanout.size(); i++)
+		if (states.find(node->fanout[i]) == states.end() || states[node->fanout[i]] == true)
+			removeAllFanout(node->fanout[i], states, removed);
 }
 
 void graph2Blif(Graph& path_original, Graph& path_golden)
