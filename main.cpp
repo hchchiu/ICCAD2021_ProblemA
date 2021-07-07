@@ -113,7 +113,9 @@ void node2Blif(ofstream& outfile, Node* currNode);
 //let original POs and Golden POs connet to the XOR to make the miter
 void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden);
 //call abc -> "turn blif into cnf" and minisat -> "check if this two netlist is equal"
-void SATsolver();
+bool SATsolver();
+//check if output is UNSAT
+bool readSATsolverResult();
 //abc tool
 void abcBlif2CNF();
 
@@ -166,12 +168,14 @@ bool seedIsDifferent(Node* origin, Node* golden);
 										.		     ->  removeAllFanout  ->  removeAllFanout
    ------------------------------------------------------------------------------------------
 	   |
-   ------------------------------------------------------------
-	outputBlif  ->  graph2Blif  ->  createFaninCone  ->  node2Blif
-											.		 ->  faninIsPI
-						.		->  netlist2Blif  ->  node2Blif		
-		.		->  buildMiter
-   ------------------------------------------------------------
+   -------------------------------------------------------------------------------------
+	randomSimulation  ->  outputBlif  ->  graph2Blif  ->  createFaninCone  ->  node2Blif
+											   .	  ->  faninIsPI
+							  .		  ->  netlist2Blif  ->  node2Blif		
+							  .		  ->  buildMiter
+			.		  ->  SATsolver  ->  abcBlif2CNF
+							  .	     ->  readSATsolverResult
+   -------------------------------------------------------------------------------------
 */
 
 
@@ -223,9 +227,6 @@ int main(int argc, char* argv[])
 	int k = 0;
 
 	randomSimulation(matchInfo);
-
-	
-
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -870,7 +871,10 @@ void randomSimulation(MatchInfo& matchInfo)
 				//turn this two gate fanin cone into blif file
 				outputBlif(og_it->first, gd_it->first);
 				//call SAT solver
-				SATsolver();
+				if (SATsolver()){
+					//...
+					cout << "succ";
+				}
 			}
 		}
 	}
@@ -1059,16 +1063,34 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden)
 
 }
 
-void SATsolver()
+bool SATsolver()
 {
 	abcBlif2CNF();
 	system("/home/s1071512/ICCAD2021_ProblemA/./minisat ./cnf/check.cnf out.txt");
+	if (readSATsolverResult())
+		return true;
+	return false;
+}
+
+bool readSATsolverResult()
+{
+	ifstream infile("out.txt");
+	string result;
+	infile >> result;
+	infile.close();
+	if (result == "UNSAT")
+		return true;
+		
+	return false;
+
+	
 }
 
 void abcBlif2CNF() 
 {
 	system("/home/s1071512/ICCAD2021_ProblemA/./blif2cnf.out ./blif/check.blif");
 }
+
 
 /*
 bool pisetIsDifferent(Node object, Node golden)
