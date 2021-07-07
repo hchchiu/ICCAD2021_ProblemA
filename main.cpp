@@ -23,6 +23,7 @@ struct Node
 	vector<Node*> fanin;
 	vector<Node*> fanout;
 	set <Node*> piset;
+	set <Node*> faninCone;
 	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
 	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
@@ -101,6 +102,8 @@ void randomSimulation(MatchInfo& matchInfo);
 void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode);
 //check if this node's fanin is PI
 bool faninIsPI(Node* nextNode);
+//remove fanin node 
+void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSameNode);
 
 //outputBlif
 void outputBlif(Node* originalNode, Node* goldenNode);
@@ -537,6 +540,7 @@ void topologicalSort(Graph& graph)
 	}
 	graph.netlist = sortNode;
 }
+
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack)
 {
 	//Mark the current node as visited
@@ -548,16 +552,22 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 	}
 	Stack.push(node);
 }
+
 void setNodePIsetandSeed(Graph& graph)
 {
 	for (int i = 0; i < graph.netlist.size(); ++i) {
 		Node* currNode = graph.netlist[i];
+		//add itself to fanincone
+		currNode->faninCone.insert(currNode);
 		if (currNode->fanin.size() > 0) {
 			vector<unsigned*> faninSeed;
 			for (int j = 0; j < currNode->fanin.size(); ++j) {
 				//set the PI to the PISET
 				Node* faninNode = currNode->fanin[j];
 				currNode->piset.insert(faninNode->piset.begin(), faninNode->piset.end());
+
+				//set fanin cone
+				currNode->faninCone.insert(faninNode->faninCone.begin(), faninNode->faninCone.end());
 
 				//record fanin seed
 				faninSeed.push_back(faninNode->seeds);
@@ -619,7 +629,6 @@ unsigned* getRandomSeed()
 	*/
 	return bw;
 }
-
 
 void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
 {
@@ -872,13 +881,31 @@ void randomSimulation(MatchInfo& matchInfo)
 				outputBlif(og_it->first, gd_it->first);
 				//call SAT solver
 				if (SATsolver()){
-					//...
-					cout << "succ";
+					matchInfo.matches[gd_it->first] = og_it->first;
+					removeAllFanin(matchInfo, og_it->first, gd_it->first);
+					og_it = matchInfo.originRemoveNode.begin();
+					break;
 				}
 			}
 		}
+		
 	}
 }
+void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSameNode)
+{
+	for (const auto& it : originalSameNode->faninCone) {
+		if (matchInfo.originRemoveNode.find(it) != matchInfo.originRemoveNode.end()) {
+			matchInfo.originRemoveNode.erase(it);
+		}
+	}
+
+	for (const auto& it : goldenSameNode->faninCone) {
+		if (matchInfo.goldenRemoveNode.find(it) != matchInfo.goldenRemoveNode.end()) {
+			matchInfo.goldenRemoveNode.erase(it);
+		}
+	}
+}
+
 
 void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
 {
@@ -1082,8 +1109,6 @@ bool readSATsolverResult()
 		return true;
 		
 	return false;
-
-	
 }
 
 void abcBlif2CNF() 
