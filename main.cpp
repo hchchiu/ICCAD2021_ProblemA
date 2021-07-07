@@ -98,7 +98,7 @@ void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& rem
 //start Random Simulation
 void randomSimulation(MatchInfo& matchInfo);
 //create a path for SAT solver
-void createPath(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode);
+void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode);
 //check if this node's fanin is PI
 bool faninIsPI(Node* nextNode);
 
@@ -112,6 +112,12 @@ void netlist2Blif(ofstream& outfile, vector<Node*>& netlist);
 void node2Blif(ofstream& outfile, Node* currNode);
 //let original POs and Golden POs connet to the XOR to make the miter
 void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden);
+//call abc -> "turn blif into cnf" and minisat -> "check if this two netlist is equal"
+void SATsolver();
+//abc tool
+void abcBlif2CNF();
+
+
 
 
 // Output patch
@@ -160,12 +166,12 @@ bool seedIsDifferent(Node* origin, Node* golden);
 										.		     ->  removeAllFanout  ->  removeAllFanout
    ------------------------------------------------------------------------------------------
 	   |
-   --------------------------------------------
-	graph2Blif  ->  netlist2Blif  ->  node2Blif
+   ------------------------------------------------------------
+	outputBlif  ->  graph2Blif  ->  createFaninCone  ->  node2Blif
+											.		 ->  faninIsPI
+						.		->  netlist2Blif  ->  node2Blif		
 		.		->  buildMiter
-		.		->  call abc.exe
-		.		->  call minisat.exe
-   --------------------------------------------
+   ------------------------------------------------------------
 */
 
 
@@ -218,7 +224,7 @@ int main(int argc, char* argv[])
 
 	randomSimulation(matchInfo);
 
-	system("/home/s1071512/ICCAD2021_ProblemA/./blif2cnf.out ./blif/check.blif");
+	
 
 }
 
@@ -811,7 +817,6 @@ bool IsGateTypeEqual(Node* origin, Node* golden)
 	return false;
 }
 
-
 bool IsFaninEqual(Node* origin, Node* golden, MatchInfo matchInfo)
 {
 	for (int i = 0; i < origin->fanin.size(); i++) {
@@ -862,13 +867,16 @@ void randomSimulation(MatchInfo& matchInfo)
 		gd_it = matchInfo.goldenRemoveNode.begin();
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
+				//turn this two gate fanin cone into blif file
 				outputBlif(og_it->first, gd_it->first);
+				//call SAT solver
+				SATsolver();
 			}
 		}
 	}
 }
 
-void createPath(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
+void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
 {
 	//check whether this node's fanin is PI or not
 	if (faninIsPI(nextNode))
@@ -878,7 +886,7 @@ void createPath(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
 
 	for (int i = 0; i < nextNode->fanin.size(); ++i) {
 		if (nextNode->fanin[i]->type != 9)
-			createPath(outfile, nextNode->fanin[i], internalNode);
+			createFaninCone(outfile, nextNode->fanin[i], internalNode);
 	}
 
 }
@@ -935,33 +943,9 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode)
 {
 	vector<Node*> internalNode;
-	createPath(outfile, originalNode, internalNode);
-	createPath(outfile, goldenNode, internalNode);
-
-	//write -> ".names ..."
-	//we can modify the topological sort pi oder
-	//that we can code here easier
-	/*
-	map<Node*, bool> visited;
-	for (int i = 0; i < path_original.netlist.size(); ++i)
-		visited[path_original.netlist[i]] = false;
-
-	for (int i = 0; i < path_golden.netlist.size(); ++i)
-		visited[path_golden.netlist[i]] = false;
-
-	//original pi
-	netlist2Blif(outfile, path_original.PI, visited);
-	//golden pi
-	netlist2Blif(outfile, path_golden.PI, visited);
-	//original netlist -> G1
-	netlist2Blif(outfile, path_original.netlist, visited);	*/
-	//golden netlist -> R2
-	netlist2Blif(outfile, internalNode);
-
-	//build miter
-	//buildMiter(outfile,originalNode, goldenNode);
-
-	
+	createFaninCone(outfile, originalNode, internalNode);
+	createFaninCone(outfile, goldenNode, internalNode);
+	netlist2Blif(outfile, internalNode);	
 }
 
 void netlist2Blif(ofstream& outfile, vector<Node*>& netlist)
@@ -1075,7 +1059,16 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden)
 
 }
 
+void SATsolver()
+{
+	abcBlif2CNF();
+	system("/home/s1071512/ICCAD2021_ProblemA/./minisat ./cnf/check.cnf out.txt");
+}
 
+void abcBlif2CNF() 
+{
+	system("/home/s1071512/ICCAD2021_ProblemA/./blif2cnf.out ./blif/check.blif");
+}
 
 /*
 bool pisetIsDifferent(Node object, Node golden)
