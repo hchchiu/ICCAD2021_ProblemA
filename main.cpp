@@ -882,7 +882,7 @@ void randomSimulation(MatchInfo& matchInfo)
 				outputBlif(og_it->first, gd_it->first);
 				//call SAT solver
 				if (SATsolver()){
-					cout << "golden: " << gd_it->first->name << "original: " << og_it->first->name << "-> same"<<endl;
+					cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 					matchInfo.matches[gd_it->first] = og_it->first;
 					removeAllFanin(matchInfo, og_it->first, gd_it->first);
 					og_it = matchInfo.originRemoveNode.begin();
