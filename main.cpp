@@ -872,14 +872,15 @@ void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& rem
 
 void randomSimulation(MatchInfo& matchInfo)
 {
-	auto gd_it = matchInfo.goldenRemoveNode.begin();
-	auto og_it = matchInfo.originRemoveNode.begin();
+	map<Node*,bool>::iterator gd_it = matchInfo.goldenRemoveNode.begin();
+	map<Node*, bool>::iterator og_it = matchInfo.originRemoveNode.begin();
 	for (; og_it != matchInfo.originRemoveNode.end(); ++og_it) {
 		gd_it = matchInfo.goldenRemoveNode.begin();
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
-				outputBlif(og_it->first, gd_it->first);
+				if(og_it->first->piset == gd_it->first->piset)
+					outputBlif(og_it->first, gd_it->first);
 				//call SAT solver
 				if (SATsolver()){
 					cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
@@ -896,15 +897,17 @@ void randomSimulation(MatchInfo& matchInfo)
 }
 void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSameNode)
 {
-	for (const auto& it : originalSameNode->faninCone) {
-		if (matchInfo.originRemoveNode.find(it) != matchInfo.originRemoveNode.end()) {
-			matchInfo.originRemoveNode.erase(it);
+	set<Node*>::iterator it = originalSameNode->faninCone.begin();
+	for (; it != originalSameNode->faninCone.end(); ++it) {
+		if (matchInfo.originRemoveNode.find(*it) != matchInfo.originRemoveNode.end()) {
+			matchInfo.originRemoveNode.erase(*it);
 		}
 	}
 
-	for (const auto& it : goldenSameNode->faninCone) {
-		if (matchInfo.goldenRemoveNode.find(it) != matchInfo.goldenRemoveNode.end()) {
-			matchInfo.goldenRemoveNode.erase(it);
+	it = goldenSameNode->faninCone.begin();
+	for (; it != goldenSameNode->faninCone.end(); ++it) {
+		if (matchInfo.goldenRemoveNode.find(*it) != matchInfo.goldenRemoveNode.end()) {
+			matchInfo.goldenRemoveNode.erase(*it);
 		}
 	}
 }
@@ -924,12 +927,12 @@ void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalN
 			createFaninCone(outfile, nextNode->fanin[i], internalNode);
 	}
 	*/
-
-	for (const auto &it : nextNode->faninCone) {
-		if (faninIsPI(it))
-			node2Blif(outfile, it);
-		else if(it->type != 9)
-			internalNode.push_back(it);
+	set<Node*>::iterator it = nextNode->faninCone.begin();
+	for (; it != nextNode->faninCone.end(); ++it) {
+		if (faninIsPI(*it))
+			node2Blif(outfile, *it);
+		else if((*it)->type != 9)
+			internalNode.push_back(*it);
 	}
 
 }
@@ -961,18 +964,24 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 
 	//write -> ".inputs ..."
 	outfile << ".inputs";
-	set<Node*> tmp = originalNode->piset.size() > goldenNode->piset.size() ? originalNode->piset : goldenNode->piset;
+	/*set<Node*> tmp = originalNode->piset.size() > goldenNode->piset.size() ? originalNode->piset : goldenNode->piset;
 	for (const auto& it : tmp) {
 		outfile << " " << it->name;
 		//std::cout << it->name << " ";
-	}
-	outfile << endl;
-	/*
+	}*/
+	
+
+	/*if (originalNode->piset.size() > goldenNode->piset.size())
+		it = originalNode->piset.begin();
+	else
+		it = goldenNode->piset.begin();*/
+
 	set<Node*>::iterator it = originalNode->piset.begin();
 	for (; it != originalNode->piset.end(); ++it) {
 		outfile << " " << (*it)->name;
-		cout << " " << (*it)->name;
-	}*/
+		//cout << " " << (*it)->name;
+	}
+	outfile << endl;
 	//write -> ".outputs ..."
 	outfile << ".outputs " << "output";
 	outfile << endl;
