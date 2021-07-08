@@ -178,6 +178,7 @@ bool seedIsDifferent(Node* origin, Node* golden);
 							  .		  ->  buildMiter
 			.		  ->  SATsolver  ->  abcBlif2CNF
 							  .	     ->  readSATsolverResult
+			.		  ->  removeAllFanin				  
    -------------------------------------------------------------------------------------
 */
 
@@ -881,6 +882,7 @@ void randomSimulation(MatchInfo& matchInfo)
 				outputBlif(og_it->first, gd_it->first);
 				//call SAT solver
 				if (SATsolver()){
+					cout << "golden: " << gd_it->first->name << "original: " << og_it->first->name << "-> same"<<endl;
 					matchInfo.matches[gd_it->first] = og_it->first;
 					removeAllFanin(matchInfo, og_it->first, gd_it->first);
 					og_it = matchInfo.originRemoveNode.begin();
@@ -888,7 +890,8 @@ void randomSimulation(MatchInfo& matchInfo)
 				}
 			}
 		}
-		
+		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
+			break;
 	}
 }
 void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSameNode)
@@ -910,6 +913,7 @@ void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSam
 void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
 {
 	//check whether this node's fanin is PI or not
+	/*
 	if (faninIsPI(nextNode))
 		node2Blif(outfile, nextNode);
 	else
@@ -918,6 +922,14 @@ void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalN
 	for (int i = 0; i < nextNode->fanin.size(); ++i) {
 		if (nextNode->fanin[i]->type != 9)
 			createFaninCone(outfile, nextNode->fanin[i], internalNode);
+	}
+	*/
+
+	for (const auto &it : nextNode->faninCone) {
+		if (faninIsPI(it))
+			node2Blif(outfile, it);
+		else if(it->type != 9)
+			internalNode.push_back(it);
 	}
 
 }
@@ -949,8 +961,8 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 
 	//write -> ".inputs ..."
 	outfile << ".inputs";
-
-	for (const auto& it : originalNode->piset) {
+	set<Node*> tmp = originalNode->piset.size() > goldenNode->piset.size() ? originalNode->piset : goldenNode->piset;
+	for (const auto& it : tmp) {
 		outfile << " " << it->name;
 		//std::cout << it->name << " ";
 	}
