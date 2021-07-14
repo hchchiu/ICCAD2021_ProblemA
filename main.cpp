@@ -17,6 +17,9 @@ using namespace std;
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
+
+
+
 struct Node
 {
 	string name;
@@ -52,6 +55,13 @@ struct MatchInfo
 	set<Node*> goldenSupprotSet; //record support set
 };
 
+struct NameCompare
+{
+	bool operator()(const Node* lhs, const Node* rhs) {
+		return lhs->name == rhs->name;
+	}
+};
+
 void loadFile(Graph& graph, char* argv);
 
 // Convert verilog command to graph
@@ -66,6 +76,7 @@ void PiPoRecord(string str, Graph& graph);
 Node* initialNewnode(string name, int type, string graphName);
 // Select gate type
 int selectGateType(string gate);
+
 
 //run topological sort
 void topologicalSort(Graph& graph);
@@ -96,6 +107,7 @@ bool IsVisited(Node* target, map<Node*, bool>maps);
 // when a node not match, removing all fanout
 void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& removed);
 
+
 //start Random Simulation
 void randomSimulation(MatchInfo& matchInfo);
 //create a path for SAT solver
@@ -104,6 +116,7 @@ void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalN
 bool faninIsPI(Node* nextNode);
 //remove fanin node 
 void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSameNode);
+
 
 //outputBlif
 void outputBlif(Node* originalNode, Node* goldenNode);
@@ -121,8 +134,6 @@ bool SATsolver();
 bool readSATsolverResult();
 //abc tool
 void abcBlif2CNF();
-
-
 
 
 // Output patch
@@ -879,15 +890,16 @@ void randomSimulation(MatchInfo& matchInfo)
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
-				if(og_it->first->piset == gd_it->first->piset)
+				if (og_it->first->piset.size() == gd_it->first->piset.size()) {
 					outputBlif(og_it->first, gd_it->first);
-				//call SAT solver
-				if (SATsolver()){
-					cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
-					matchInfo.matches[gd_it->first] = og_it->first;
-					removeAllFanin(matchInfo, og_it->first, gd_it->first);
-					og_it = matchInfo.originRemoveNode.begin();
-					break;
+					//call SAT solver
+					if (SATsolver()) {
+						cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+						matchInfo.matches[gd_it->first] = og_it->first;
+						removeAllFanin(matchInfo, og_it->first, gd_it->first);
+						og_it = matchInfo.originRemoveNode.begin();
+						break;
+					}
 				}
 			}
 		}
@@ -895,6 +907,7 @@ void randomSimulation(MatchInfo& matchInfo)
 			break;
 	}
 }
+
 void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSameNode)
 {
 	set<Node*>::iterator it = originalSameNode->faninCone.begin();
@@ -911,7 +924,6 @@ void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSam
 		}
 	}
 }
-
 
 void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
 {
@@ -970,12 +982,6 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 		//std::cout << it->name << " ";
 	}*/
 	
-
-	/*if (originalNode->piset.size() > goldenNode->piset.size())
-		it = originalNode->piset.begin();
-	else
-		it = goldenNode->piset.begin();*/
-
 	set<Node*>::iterator it = originalNode->piset.begin();
 	for (; it != originalNode->piset.end(); ++it) {
 		outfile << " " << (*it)->name;
@@ -1114,7 +1120,7 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden)
 bool SATsolver()
 {
 	abcBlif2CNF();
-	system("/home/s1071512/ICCAD2021_ProblemA/./minisat ./cnf/check.cnf out.txt");
+	system("./minisat ./cnf/check.cnf out.txt");
 	if (readSATsolverResult())
 		return true;
 	return false;
@@ -1134,7 +1140,7 @@ bool readSATsolverResult()
 
 void abcBlif2CNF() 
 {
-	system("/home/s1071512/ICCAD2021_ProblemA/./blif2cnf.out ./blif/check.blif");
+	system("./blif2cnf.out ./blif/check.blif");
 }
 
 
