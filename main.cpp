@@ -111,7 +111,7 @@ void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& rem
 //start Random Simulation
 void randomSimulation(MatchInfo& matchInfo);
 //create a path for SAT solver
-void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode);
+void outputPIwithFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode, vector<bool>& faninConst);
 //check if this node's fanin is PI
 bool faninIsPI(Node* nextNode);
 //remove fanin node 
@@ -121,9 +121,11 @@ void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSa
 //outputBlif
 void outputBlif(Node* originalNode, Node* goldenNode);
 //transfer graph to blif file and write blif file
-void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode);
+void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode, vector<bool>& faninConst);
 //find the node's fanout and call node2Blif 
 void netlist2Blif(ofstream& outfile, vector<Node*>& netlist);
+//output constant 0 or 1 in blif file
+void outputConst(ofstream& outfile, vector<bool>& faninConst);
 //write gate type ex: and gate -> 11 1
 void node2Blif(ofstream& outfile, Node* currNode);
 //let original POs and Golden POs connet to the XOR to make the miter
@@ -183,7 +185,7 @@ bool seedIsDifferent(Node* origin, Node* golden);
    ------------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
-	randomSimulation  ->  outputBlif  ->  graph2Blif  ->  createFaninCone  ->  node2Blif
+	randomSimulation  ->  outputBlif  ->  graph2Blif  ->  outputPIwithFaninCone  ->  node2Blif
 											   .	  ->  faninIsPI
 							  .		  ->  netlist2Blif  ->  node2Blif		
 							  .		  ->  buildMiter
@@ -925,7 +927,7 @@ void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSam
 	}
 }
 
-void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode)
+void outputPIwithFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode, vector<bool>& faninConst)
 {
 	//check whether this node's fanin is PI or not
 	/*
@@ -936,15 +938,21 @@ void createFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalN
 
 	for (int i = 0; i < nextNode->fanin.size(); ++i) {
 		if (nextNode->fanin[i]->type != 9)
-			createFaninCone(outfile, nextNode->fanin[i], internalNode);
+			outputPIwithFaninCone(outfile, nextNode->fanin[i], internalNode);
 	}
 	*/
 	set<Node*>::iterator it = nextNode->faninCone.begin();
 	for (; it != nextNode->faninCone.end(); ++it) {
 		if (faninIsPI(*it))
 			node2Blif(outfile, *it);
-		else if((*it)->type != 9)
+		else if ((*it)->type != 9) {
+			if ((*it)->name == "1'b0" && !faninConst[0])
+				faninConst[0] = true;
+			else if((*it)->name == "1'b1" && !faninConst[1])
+				faninConst[1] = true;
+
 			internalNode.push_back(*it);
+		}
 	}
 
 }
@@ -991,18 +999,20 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 	//write -> ".outputs ..."
 	outfile << ".outputs " << "output";
 	outfile << endl;
-
-	graph2Blif(outfile, originalNode, goldenNode);
+	vector<bool> faninConst;
+	faninConst.resize(2, false);
+	graph2Blif(outfile, originalNode, goldenNode, faninConst);
 	buildMiter(outfile, originalNode, goldenNode);
 	outfile << ".end";
 	outfile.close();
 }
 
-void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode)
+void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode,vector<bool>& faninConst)
 {
 	vector<Node*> internalNode;
-	createFaninCone(outfile, originalNode, internalNode);
-	createFaninCone(outfile, goldenNode, internalNode);
+	outputPIwithFaninCone(outfile, originalNode, internalNode, faninConst);
+	outputPIwithFaninCone(outfile, goldenNode, internalNode, faninConst);
+	outputConst(outfile, faninConst);
 	netlist2Blif(outfile, internalNode);	
 }
 
@@ -1011,6 +1021,20 @@ void netlist2Blif(ofstream& outfile, vector<Node*>& netlist)
 	for (int i = 0; i < netlist.size(); ++i) {
 		node2Blif(outfile, netlist[i]);
 	}
+}
+
+void outputConst(ofstream& outfile, vector<bool>& faninConst)
+{
+	if (faninConst[0]) {
+		outfile << ".names 1'b0" << endl
+			<< "0" << endl;
+	}
+
+	if (faninConst[1]) {
+		outfile << ".names 1'b1" << endl
+			<< "1" << endl;
+	}
+
 }
 
 void node2Blif(ofstream& outfile, Node* currNode)
