@@ -31,10 +31,15 @@
 - 2021/07/04 20:50
 	- [修改]	`verilog2Graph`，分成2 fanin gate時realgate沒有更改值
 	- [修改]	`node2Blif`，PI應該都是一樣不需要加tag，新增assign判斷
+- 2021/07/14 02:26
+ 	- [新增]  `outputConst`，輸出constant的blif(1'b0,1'b1)
+ 	- [新增]  `outputBlif`，增加faninConst判斷是否有const
+	- [修改]	`randomSimulation`，移除set equal判斷(之後需修改)
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
-- [ ] 利用Random Simulation做Compare
-- [ ] 利用SAT做Compare
+- [X] 利用Random Simulation做Compare
+- [X] 利用SAT做Compare
+- [ ]  產生patch
 
 
 ## abc
