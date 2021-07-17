@@ -1173,7 +1173,7 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden)
 bool SATsolver()
 {
 	abcBlif2CNF();
-	system("./minisat ./cnf/check.cnf out.txt");
+	system("./minisat ./cnf/check.cnf out.txt > minisatScreen.txt ");
 	if (readSATsolverResult())
 		return true;
 	return false;
@@ -1193,7 +1193,7 @@ bool readSATsolverResult()
 
 void abcBlif2CNF()
 {
-	system("./blif2cnf.out ./blif/check.blif");
+	system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
 }
 
 void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
@@ -1212,7 +1212,12 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 		}*/
 		G1backup.netlist.push_back(currNode);
 	}
-	compareNetlist(matchInfo, R2backup, G1backup);
+	
+
+	if (compareNetlist(matchInfo, R2backup, G1backup))
+		cout << "Patched G1 Success!" << endl;
+	else
+		cout << "Patched G1 Error!" << endl;
 }
 
 bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
@@ -1277,7 +1282,8 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	for (int i = 0;i < R2backup.PO.size(); ++i) {
 		buildMiter(outfile, R2backup.PO[i], R2backup.PO[i]);
 	}
-	return false;
+
+	return SATsolver();
 }
 
 void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName,map<Node*,Node*>& matches)
