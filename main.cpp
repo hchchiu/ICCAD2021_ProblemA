@@ -119,15 +119,19 @@ void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSa
 
 
 //outputBlif
-void outputBlif(Node* originalNode, Node* goldenNode);
+void outputBlif(ofstream& outfile, Node* originalNode, Node* goldenNode);
 //transfer graph to blif file and write blif file
-void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode, vector<bool>& faninConst);
+void graph2Blif(Node* originalNode, Node* goldenNode);
 //find the node's fanout and call node2Blif 
 void netlist2Blif(ofstream& outfile, vector<Node*>& netlist);
 //output constant 0 or 1 in blif file
 void outputConst(ofstream& outfile, vector<bool>& faninConst);
+//output .names to BLIF File
+void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName);
+//out .names to BLIF File for patch
+void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName, map<Node*, Node*>& matches);
 //write gate type ex: and gate -> 11 1
-void node2Blif(ofstream& outfile, Node* currNode);
+void node2Blif(ofstream& outfile, Node* currNode, int type);
 //let original POs and Golden POs connet to the XOR to make the miter
 void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden);
 //call abc -> "turn blif into cnf" and minisat -> "check if this two netlist is equal"
@@ -137,6 +141,11 @@ bool readSATsolverResult();
 //abc tool
 void abcBlif2CNF();
 
+
+//------ start create patch -------
+void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1);
+//check whether R2 and G1 are same after finishing  patch
+bool compareNetlist(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -186,12 +195,12 @@ bool seedIsDifferent(Node* origin, Node* golden);
 	   |
    -------------------------------------------------------------------------------------
 	randomSimulation  ->  outputBlif  ->  graph2Blif  ->  outputPIwithFaninCone  ->  node2Blif
-											   .	  ->  faninIsPI
-							  .		  ->  netlist2Blif  ->  node2Blif		
+											   .	  ->  outputConst
+											   .	  ->  netlist2Blif  ->  node2Blif
 							  .		  ->  buildMiter
 			.		  ->  SATsolver  ->  abcBlif2CNF
 							  .	     ->  readSATsolverResult
-			.		  ->  removeAllFanin				  
+			.		  ->  removeAllFanin
    -------------------------------------------------------------------------------------
 */
 
@@ -244,6 +253,8 @@ int main(int argc, char* argv[])
 	int k = 0;
 
 	randomSimulation(matchInfo);
+
+	createPatch(matchInfo, R2, G1);
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -442,6 +453,7 @@ void PiPoRecord(string str, Graph& graph)
 					graph.PI.push_back(req);
 					//req->piset.push_back(req);
 					req->piset.insert(req);
+					req->graphName = graph.name;
 				}
 				else if (type == "output") {
 					req->type = 10;
@@ -470,6 +482,7 @@ void PiPoRecord(string str, Graph& graph)
 				graph.PI.push_back(req);
 				//req->piset.push_back(req);
 				req->piset.insert(req);
+				req->graphName = graph.name;
 			}
 			else if (type == "output") {
 				req->type = 10;
@@ -885,7 +898,7 @@ void removeAllFanout(Node* node, map<Node*, bool>& states, map<Node*, bool>& rem
 
 void randomSimulation(MatchInfo& matchInfo)
 {
-	map<Node*,bool>::iterator gd_it = matchInfo.goldenRemoveNode.begin();
+	map<Node*, bool>::iterator gd_it = matchInfo.goldenRemoveNode.begin();
 	map<Node*, bool>::iterator og_it = matchInfo.originRemoveNode.begin();
 	for (; og_it != matchInfo.originRemoveNode.end(); ++og_it) {
 		gd_it = matchInfo.goldenRemoveNode.begin();
@@ -893,9 +906,9 @@ void randomSimulation(MatchInfo& matchInfo)
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
 				if (og_it->first->piset.size() == gd_it->first->piset.size()) {
-					outputBlif(og_it->first, gd_it->first);
+					graph2Blif(og_it->first, gd_it->first);
 					//call SAT solver
-					if (SATsolver()) {
+					if (SATsolver() || true) {
 						cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 						matchInfo.matches[gd_it->first] = og_it->first;
 						removeAllFanin(matchInfo, og_it->first, gd_it->first);
@@ -910,7 +923,7 @@ void randomSimulation(MatchInfo& matchInfo)
 	}
 }
 
-void removeAllFanin(MatchInfo& matchInfo,Node* originalSameNode, Node* goldenSameNode)
+void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSameNode)
 {
 	set<Node*>::iterator it = originalSameNode->faninCone.begin();
 	for (; it != originalSameNode->faninCone.end(); ++it) {
@@ -941,14 +954,19 @@ void outputPIwithFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& int
 			outputPIwithFaninCone(outfile, nextNode->fanin[i], internalNode);
 	}
 	*/
+
+	//!!!!!
+	//need to modify because of faninCone 
+	//so here can use piset to output pi fanout into blif file
+	//!!!!!
 	set<Node*>::iterator it = nextNode->faninCone.begin();
 	for (; it != nextNode->faninCone.end(); ++it) {
 		if (faninIsPI(*it))
-			node2Blif(outfile, *it);
+			outputDotNames(outfile, *it, (*it)->graphName);
 		else if ((*it)->type != 9) {
 			if ((*it)->name == "1'b0" && !faninConst[0])
 				faninConst[0] = true;
-			else if((*it)->name == "1'b1" && !faninConst[1])
+			else if ((*it)->name == "1'b1" && !faninConst[1])
 				faninConst[1] = true;
 
 			internalNode.push_back(*it);
@@ -976,9 +994,8 @@ bool faninIsPI(Node* nextNode)
 	return false;
 }
 
-void outputBlif(Node* originalNode, Node* goldenNode)
+void outputBlif(ofstream& outfile, Node* originalNode, Node* goldenNode)
 {
-	ofstream outfile("./blif/check.blif");
 	//write -> ".model check"
 	outfile << ".model check" << endl;
 
@@ -989,7 +1006,7 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 		outfile << " " << it->name;
 		//std::cout << it->name << " ";
 	}*/
-	
+
 	set<Node*>::iterator it = originalNode->piset.begin();
 	for (; it != originalNode->piset.end(); ++it) {
 		outfile << " " << (*it)->name;
@@ -999,27 +1016,30 @@ void outputBlif(Node* originalNode, Node* goldenNode)
 	//write -> ".outputs ..."
 	outfile << ".outputs " << "output";
 	outfile << endl;
+}
+
+void graph2Blif(Node* originalNode, Node* goldenNode)
+{
+	ofstream outfile("./blif/check.blif");
+	vector<Node*> internalNode;
 	vector<bool> faninConst;
 	faninConst.resize(2, false);
-	graph2Blif(outfile, originalNode, goldenNode, faninConst);
+
+	outputBlif(outfile, originalNode, goldenNode);
+	outputPIwithFaninCone(outfile, originalNode, internalNode, faninConst);
+	outputPIwithFaninCone(outfile, goldenNode, internalNode, faninConst);
+	outputConst(outfile, faninConst);
+	netlist2Blif(outfile, internalNode);
+
 	buildMiter(outfile, originalNode, goldenNode);
 	outfile << ".end";
 	outfile.close();
 }
 
-void graph2Blif(ofstream& outfile, Node* originalNode, Node* goldenNode,vector<bool>& faninConst)
-{
-	vector<Node*> internalNode;
-	outputPIwithFaninCone(outfile, originalNode, internalNode, faninConst);
-	outputPIwithFaninCone(outfile, goldenNode, internalNode, faninConst);
-	outputConst(outfile, faninConst);
-	netlist2Blif(outfile, internalNode);	
-}
-
 void netlist2Blif(ofstream& outfile, vector<Node*>& netlist)
 {
 	for (int i = 0; i < netlist.size(); ++i) {
-		node2Blif(outfile, netlist[i]);
+		outputDotNames(outfile, netlist[i], netlist[i]->graphName);
 	}
 }
 
@@ -1037,9 +1057,8 @@ void outputConst(ofstream& outfile, vector<bool>& faninConst)
 
 }
 
-void node2Blif(ofstream& outfile, Node* currNode)
+void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 {
-	//0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
 	int type;
 	if (currNode->type == 10 || currNode->type == 9)
 		type = currNode->realGate;
@@ -1052,18 +1071,28 @@ void node2Blif(ofstream& outfile, Node* currNode)
 		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
 		<< " " << currNode->name + "_" + currNode->graphName << endl;*/
 
-	outfile << ".names" << " " << currNode->fanin[0]->name;
-	if (currNode->fanin[0]->type != 9)
-		outfile << "_" + currNode->graphName;
-	if (currNode->fanin.size() > 1) {
-		outfile << " " << currNode->fanin[1]->name;
-		if (currNode->fanin[1]->type != 9)
-			outfile << "_" + currNode->graphName;
+
+	outfile << ".names";
+	for (int i = 0; i < currNode->fanin.size(); ++i) {
+		if (currNode->fanin[i]->graphName == currGraphName) {
+			outfile << " " << currNode->fanin[i]->name;
+			if (currNode->fanin[i]->type != 9)
+				outfile << "_" + currGraphName;
+		}
 	}
+
 	outfile << " " << currNode->name;
 	if (currNode->type != 9)
-		outfile << "_" + currNode->graphName;
+		outfile << "_" + currGraphName;
+
 	outfile << endl;
+	node2Blif(outfile, currNode, type);
+}
+
+
+void node2Blif(ofstream& outfile, Node* currNode, int type)
+{
+	//0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
 
 	if (currNode->fanin.size() > 1) {
 		//and gate
@@ -1129,8 +1158,8 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden)
 	}*/
 	//need to add
 	outfile << ".names";
-	outfile << " " << PO_original->name + "_" + PO_original->graphName;
-	outfile << " " << PO_golden->name + "_" + PO_golden->graphName;
+	outfile << " " << PO_original->name + "_" + "G1";
+	outfile << " " << PO_golden->name + "_" + "R2";
 	outfile << " " << "miter_0" << endl;
 	//outfile xor gate
 	outfile << "01 1" << endl
@@ -1158,15 +1187,132 @@ bool readSATsolverResult()
 	infile.close();
 	if (result == "UNSAT")
 		return true;
-		
+
 	return false;
 }
 
-void abcBlif2CNF() 
+void abcBlif2CNF()
 {
 	system("./blif2cnf.out ./blif/check.blif");
 }
 
+void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
+{
+	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
+	Graph R2backup = R2;
+	Graph G1backup = G1;
+	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
+		Node* currNode = it->first;
+		/*
+		for (int i = 0; i < currNode->fanin.size(); ++i) {
+			if (matchInfo.matches.find(currNode->fanin[i]) != matchInfo.matches.end()) {
+				matchInfo.matches[currNode->fanin[i]]->fanout.push_back(currNode);
+				currNode->fanin.push_back(matchInfo.matches[currNode->fanin[i]]);
+			}
+		}*/
+		G1backup.netlist.push_back(currNode);
+	}
+	compareNetlist(matchInfo, R2backup, G1backup);
+}
+
+bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
+{
+	ofstream outfile("./blif/check.blif");
+
+	//write -> ".model check"
+	outfile << ".model check" << endl;
+
+	//write -> ".inputs ..."
+	outfile << ".inputs";
+	for (int i = 0; i < R2backup.PI.size(); ++i) {
+		outfile << " " << R2backup.PI[i]->name;
+	}
+	outfile << endl;
+
+	//write -> ".outputs ..."
+	outfile << ".outputs " << "output";
+	outfile << endl;
+	map<Node*, bool> isVisitedG1;
+	map<Node*, bool> isVisitedR2;
+
+	for (int i = 0; i < G1backup.netlist.size(); ++i)
+		isVisitedG1[G1backup.netlist[i]] = false;
+
+	for (int i = 0; i < R2backup.netlist.size(); ++i)
+		isVisitedR2[R2backup.netlist[i]] = false;
+
+
+	//original netlist PI
+	for (int i = 0; i < G1backup.PI.size(); ++i) {
+		for (int j = 0; j < G1backup.PI[i]->fanout.size(); ++j) {
+			Node* fanoutNode = G1backup.PI[i]->fanout[j];
+			if (matchInfo.originRemoveNode.find(fanoutNode) == matchInfo.originRemoveNode.end() && !isVisitedG1[fanoutNode]) {
+				outputPatchDotNames(outfile, fanoutNode, "G1", matchInfo.matches);
+				isVisitedG1[fanoutNode] = true;
+			}
+		}
+	}
+
+	//golden netlist PI
+	for (int i = 0; i < R2backup.PI.size(); ++i) {
+		for (int j = 0; j < R2backup.PI[i]->fanout.size(); ++j) {
+			Node* fanoutNode = R2backup.PI[i]->fanout[j];
+			if (!isVisitedR2[fanoutNode]) {
+				outputPatchDotNames(outfile, fanoutNode, "R2",matchInfo.matches);
+				isVisitedR2[fanoutNode] = true;
+			}
+		}
+	}
+
+	for (int i = 0; i < G1backup.netlist.size(); ++i) {
+		if (!isVisitedG1[G1backup.netlist[i]] && G1backup.netlist[i]->type!=9 && matchInfo.originRemoveNode.find(G1backup.netlist[i]) == matchInfo.originRemoveNode.end())
+			outputPatchDotNames(outfile, G1backup.netlist[i], "G1", matchInfo.matches);
+	}
+
+	for (int i = 0; i < R2backup.netlist.size(); ++i) {
+		if (!isVisitedR2[R2backup.netlist[i]] && R2backup.netlist[i]->type != 9)
+			outputPatchDotNames(outfile, R2backup.netlist[i], "R2", matchInfo.matches);
+	}
+
+	for (int i = 0;i < R2backup.PO.size(); ++i) {
+		buildMiter(outfile, R2backup.PO[i], R2backup.PO[i]);
+	}
+	return false;
+}
+
+void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName,map<Node*,Node*>& matches)
+{
+	int type;
+	if (currNode->type == 10 || currNode->type == 9)
+		type = currNode->realGate;
+	else
+		type = currNode->type;
+
+	//write -> ".names ..."
+	/*cout << ".names"
+		<< " " << currNode->fanin[0]->name + "_" + currNode->graphName
+		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
+		<< " " << currNode->name + "_" + currNode->graphName << endl;*/
+
+
+	outfile << ".names";
+	for (int i = 0; i < currNode->fanin.size(); ++i) {
+		if (matches.find(currNode->fanin[i]) != matches.end() && currGraphName=="G1")
+			outfile << " " << matches[currNode->fanin[i]]->name;
+		else
+			outfile << " " << currNode->fanin[i]->name;
+
+		if (currNode->fanin[i]->type != 9)
+			outfile << "_" + currGraphName;
+	}
+
+	outfile << " " << currNode->name;
+	if (currNode->type != 9)
+		outfile << "_" + currGraphName;
+
+	outfile << endl;
+	node2Blif(outfile, currNode, type);
+}
 
 /*
 bool pisetIsDifferent(Node object, Node golden)

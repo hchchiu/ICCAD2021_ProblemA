@@ -61,4 +61,5 @@ make install
 ### 執行
 ```bash
 export  LD_LIBRARY_PATH="/usr/local/lib" 
+export  LD_LIBRARY_PATH=/project/cad/cad03/alpha_test/cada0047/Desktop/minisat-master/lib/
 ```
