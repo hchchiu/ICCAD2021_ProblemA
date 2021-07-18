@@ -35,6 +35,10 @@
  	- [新增]  `outputConst`，輸出constant的blif(1'b0,1'b1)
  	- [新增]  `outputBlif`，增加faninConst判斷是否有const
 	- [修改]	`randomSimulation`，移除set equal判斷(之後需修改)
+- 2021/07/18 22:15
+ 	- [新增]  在`Graph`裡新增`Constants`紀錄`1'b0`、`1'b1`位置
+ 	- [新增]  在`loadFile`裡resize`Constants`空間
+ 	- [新增]  在`verilog2graph`裡取得`Constants`位置
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
 - [X] 利用Random Simulation做Compare
