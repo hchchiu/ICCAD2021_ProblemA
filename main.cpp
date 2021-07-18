@@ -27,7 +27,7 @@ struct Node
 	set <Node*> faninCone;
 	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
-	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO 
+	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
 	int realGate; // -1:default
 	int id;//for blif file
 };
@@ -253,15 +253,24 @@ int main(int argc, char* argv[])
 	setNodePIsetandSeed(R2);
 	setNodePIsetandSeed(G1);
 
-
-
 	MatchInfo matchInfo;
 	structureCompareMain(G1, R2, matchInfo);
 	int k = 0;
-
+	/*
+	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
+	int pos = 0;
+	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
+		pos++;
+		if (it->first->name == "n_307")
+			cout << pos << endl;
+	}
+	*/
+	//check seed and do SAT solver
 	randomSimulation(matchInfo);
-
+	
+	//start create and verify patch
 	createPatch(matchInfo, R2, G1);
+
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -570,14 +579,14 @@ void topologicalSort(Graph& graph, int idStart)
 	}
 	*/
 
+	for (int i = 0; i < graph.Constants.size(); ++i) {
+		if (graph.Constants[i] != NULL && !visited[graph.Constants[i]])
+			topologicalSortUtil(graph, graph.Constants[i], visited, Stack);
+	}
+
 	for (int i = 0; i < graph.PI.size(); ++i) {
 		if (!visited[graph.PI[i]])
 			topologicalSortUtil(graph, graph.PI[i], visited, Stack);
-	}
-
-	for (int i = 0; i < graph.Constants.size(); ++i) {
-		if (graph.Constants[i]!= NULL && !visited[graph.Constants[i]])
-			topologicalSortUtil(graph, graph.Constants[i], visited, Stack);
 	}
 
 	int pos = 0;
@@ -934,7 +943,7 @@ void randomSimulation(MatchInfo& matchInfo)
 				if (og_it->first->piset.size() == gd_it->first->piset.size()) {
 					graph2Blif(og_it->first, gd_it->first);
 					//call SAT solver
-					if (SATsolver() || true) {
+					if (SATsolver()) {
 						cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 						matchInfo.matches[gd_it->first] = og_it->first;
 						removeAllFanin(matchInfo, og_it->first, gd_it->first);
@@ -964,6 +973,72 @@ void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSa
 			matchInfo.goldenRemoveNode.erase(*it);
 		}
 	}
+}
+
+
+
+bool seedIsDifferent(Node* origin, Node* golden)
+{
+	for (int i = 0; i < nWords; ++i) {
+		if (origin->seeds[i] != golden->seeds[i])
+			return true;
+	}
+	return false;
+}
+
+bool faninIsPI(Node* nextNode)
+{
+	for (int i = 0; i < nextNode->fanin.size(); ++i) {
+		if (nextNode->fanin[i]->type == 9) {
+			return true;
+		}
+	}
+	return false;
+}
+
+void graph2Blif(Node* originalNode, Node* goldenNode)
+{
+	ofstream outfile("./blif/check.blif");
+	vector<Node*> internalNode;
+	vector<bool> faninConst;
+	faninConst.resize(2, false);
+
+	outputBlif(outfile, originalNode, goldenNode);
+	outputPIwithFaninCone(outfile, originalNode, internalNode, faninConst);
+	outputPIwithFaninCone(outfile, goldenNode, internalNode, faninConst);
+	outputConst(outfile, faninConst);
+	netlist2Blif(outfile, internalNode);
+	buildMiter(outfile, originalNode, goldenNode, 0);
+
+	outfile << ".names " << "miter_0" << " output" << endl;
+	outfile << "1 1" << endl;
+	outfile << ".end";
+
+	outfile.close();
+}
+
+void outputBlif(ofstream& outfile, Node* originalNode, Node* goldenNode)
+{
+	//write -> ".model check"
+	outfile << ".model check" << endl;
+
+	//write -> ".inputs ..."
+	outfile << ".inputs";
+	/*set<Node*> tmp = originalNode->piset.size() > goldenNode->piset.size() ? originalNode->piset : goldenNode->piset;
+	for (const auto& it : tmp) {
+		outfile << " " << it->name;
+		//std::cout << it->name << " ";
+	}*/
+
+	set<Node*>::iterator it = originalNode->piset.begin();
+	for (; it != originalNode->piset.end(); ++it) {
+		outfile << " " << (*it)->name;
+		//cout << " " << (*it)->name;
+	}
+	outfile << endl;
+	//write -> ".outputs ..."
+	outfile << ".outputs " << "output";
+	outfile << endl;
 }
 
 void outputPIwithFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& internalNode, vector<bool>& faninConst)
@@ -999,71 +1074,6 @@ void outputPIwithFaninCone(ofstream& outfile, Node* nextNode, vector<Node*>& int
 		}
 	}
 
-}
-
-bool seedIsDifferent(Node* origin, Node* golden)
-{
-	for (int i = 0; i < nWords; ++i) {
-		if (origin->seeds[i] != golden->seeds[i])
-			return true;
-	}
-	return false;
-}
-
-bool faninIsPI(Node* nextNode)
-{
-	for (int i = 0; i < nextNode->fanin.size(); ++i) {
-		if (nextNode->fanin[i]->type == 9) {
-			return true;
-		}
-	}
-	return false;
-}
-
-void outputBlif(ofstream& outfile, Node* originalNode, Node* goldenNode)
-{
-	//write -> ".model check"
-	outfile << ".model check" << endl;
-
-	//write -> ".inputs ..."
-	outfile << ".inputs";
-	/*set<Node*> tmp = originalNode->piset.size() > goldenNode->piset.size() ? originalNode->piset : goldenNode->piset;
-	for (const auto& it : tmp) {
-		outfile << " " << it->name;
-		//std::cout << it->name << " ";
-	}*/
-
-	set<Node*>::iterator it = originalNode->piset.begin();
-	for (; it != originalNode->piset.end(); ++it) {
-		outfile << " " << (*it)->name;
-		//cout << " " << (*it)->name;
-	}
-	outfile << endl;
-	//write -> ".outputs ..."
-	outfile << ".outputs " << "output";
-	outfile << endl;
-}
-
-void graph2Blif(Node* originalNode, Node* goldenNode)
-{
-	ofstream outfile("./blif/check.blif");
-	vector<Node*> internalNode;
-	vector<bool> faninConst;
-	faninConst.resize(2, false);
-
-	outputBlif(outfile, originalNode, goldenNode);
-	outputPIwithFaninCone(outfile, originalNode, internalNode, faninConst);
-	outputPIwithFaninCone(outfile, goldenNode, internalNode, faninConst);
-	outputConst(outfile, faninConst);
-	netlist2Blif(outfile, internalNode);
-
-	buildMiter(outfile, originalNode, goldenNode, 0);
-
-	outfile << ".names " << "miter_0" << " output" << endl;
-	outfile << "1 1" << endl;
-	outfile << ".end";
-
-	outfile.close();
 }
 
 void netlist2Blif(ofstream& outfile, vector<Node*>& netlist)
@@ -1275,6 +1285,8 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	map<Node*, bool> isVisitedG1;
 	map<Node*, bool> isVisitedR2;
 
+
+
 	for (int i = 0; i < G1backup.netlist.size(); ++i)
 		isVisitedG1[G1backup.netlist[i]] = false;
 
@@ -1313,6 +1325,14 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 			}
 		}
 	}
+
+	//output Constant
+	vector<bool> existConst(2,false);
+	for (int i = 0; i < R2backup.Constants.size(); ++i) {
+		if (R2backup.Constants[i] != NULL || G1backup.Constants[i] != NULL)
+			existConst[i] = true;
+	}
+	outputConst(outfile, existConst);
 
 	for (int i = 0; i < G1backup.netlist.size(); ++i) {
 		if (!isVisitedG1[G1backup.netlist[i]] && G1backup.netlist[i]->type != 9 && matchInfo.originRemoveNode.find(G1backup.netlist[i]) == matchInfo.originRemoveNode.end())
@@ -1381,9 +1401,9 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 		}
 
 		//if currNode fanin is not the PI
-		if (currNode->fanin[i]->type != 9) {
+		if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1") {
 			outfile << "_" + currGraphName;
-			if (currNode->fanin[i]->type != 10)
+			if (currNode->fanin[i]->type != 10 )
 				outfile << "_" << ss.str();
 		}
 
