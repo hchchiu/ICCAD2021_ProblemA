@@ -39,11 +39,10 @@
  	- [新增]  在`Graph`裡新增`Constants`紀錄`1'b0`、`1'b1`位置
  	- [新增]  在`loadFile`裡resize`Constants`空間
  	- [新增]  在`verilog2graph`裡取得`Constants`位置
-- 2021/07/19 13:20
+- 2021/07/19 01:20
  	- [新增]  `createPatch`，將GoldenRemoveNode當作是patch
  	- [新增]  `compareNetlist`，將GoldenRemoveNode利用BLIF FILE接上Original並判斷是否一樣
  	- [新增]  `outputPatchDotNames`，用來輸出patch的BLIF FILE的.names
- 	- [新增]  `toString`，將int轉為string
  	- [新增]  `toString`，將int轉為string
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
