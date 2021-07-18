@@ -18,8 +18,6 @@ using namespace std;
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
 
-
-
 struct Node
 {
 	string name;
@@ -29,7 +27,7 @@ struct Node
 	set <Node*> faninCone;
 	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
-	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
+	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO 
 	int realGate; // -1:default
 	int id;//for blif file
 };
@@ -39,7 +37,7 @@ struct Graph
 	vector< Node* > netlist;
 	vector< Node* > PI;
 	vector< Node* > PO;
-	vector< Node*> Constants;
+	vector< Node*> Constants; //record 1'b0 1'b1
 	map<string, Node*> PIMAP;//use PI's name to find its pointer
 	string name;//Graph name -> R1,R2,G1
 	set<Node*> PIFanoutNode;//record all PI fanout Nodes
@@ -577,6 +575,11 @@ void topologicalSort(Graph& graph, int idStart)
 			topologicalSortUtil(graph, graph.PI[i], visited, Stack);
 	}
 
+	for (int i = 0; i < graph.Constants.size(); ++i) {
+		if (graph.Constants[i]!= NULL && !visited[graph.Constants[i]])
+			topologicalSortUtil(graph, graph.Constants[i], visited, Stack);
+	}
+
 	int pos = 0;
 
 	vector<Node*> sortNode;
@@ -599,7 +602,8 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 		if (!visited[nextNode])
 			topologicalSortUtil(graph, nextNode, visited, Stack);
 	}
-	Stack.push(node);
+	if( node->name!="1'b0" && node->name != "1'b1")
+		Stack.push(node);
 }
 
 void setNodePIsetandSeed(Graph& graph)
@@ -1185,8 +1189,8 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden, int miter
 	//need to add
 
 	outfile << ".names";
-	outfile << " " << PO_original->name + "_" + "G1" << "_" << toString(PO_golden->id);
-	outfile << " " << PO_golden->name + "_" + "R2" << "_" << toString(PO_golden->id);
+	outfile << " " << PO_original->name + "_" + "G1";
+	outfile << " " << PO_golden->name + "_" + "R2";
 
 	outfile << " " << "miter_" << toString(miterPos) << endl;
 	//outfile xor gate
@@ -1365,7 +1369,6 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 
 	outfile << ".names";
 	stringstream ss;
-
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		//check if currNode fanin is same in G1
 		if (matches.find(currNode->fanin[i]) != matches.end() && currGraphName == "G1") {
@@ -1378,17 +1381,23 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 		}
 
 		//if currNode fanin is not the PI
-		if (currNode->fanin[i]->type != 9)
-			outfile << "_" + currGraphName << "_" << ss.str();
+		if (currNode->fanin[i]->type != 9) {
+			outfile << "_" + currGraphName;
+			if (currNode->fanin[i]->type != 10)
+				outfile << "_" << ss.str();
+		}
+
 		ss.clear();
 		ss.str("");
 	}
 
 	//output current node with its id
-	ss << currNode->id;
 	outfile << " " << currNode->name;
-	if (currNode->type != 9)
-		outfile << "_" + currGraphName << "_" << ss.str();
+	if (currNode->type != 9) {
+		outfile << "_" + currGraphName;
+		if(currNode->type != 10)
+			outfile<<"_"<< toString(currNode->id);
+	}
 
 	outfile << endl;
 	node2Blif(outfile, currNode, type);
