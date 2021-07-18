@@ -39,6 +39,7 @@ struct Graph
 	vector< Node* > netlist;
 	vector< Node* > PI;
 	vector< Node* > PO;
+	vector< Node*> Constants;
 	map<string, Node*> PIMAP;//use PI's name to find its pointer
 	string name;//Graph name -> R1,R2,G1
 	set<Node*> PIFanoutNode;//record all PI fanout Nodes
@@ -81,7 +82,7 @@ int selectGateType(string gate);
 
 
 //run topological sort
-void topologicalSort(Graph& graph,int idStart);
+void topologicalSort(Graph& graph, int idStart);
 //topological sort recursive
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack);
 //Set every node piset and bitwise operation seed
@@ -172,7 +173,7 @@ string toString(int trans) {
 	ss << trans;
 	return ss.str();
 };
-bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name;};//for vetor PO sort
+bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };//for vetor PO sort
 /* Function Flow
 	---------------------------------------------------------
 	loadFile  ->   verilog2graph  ->   assignCommandTransform
@@ -246,7 +247,7 @@ int main(int argc, char* argv[])
 	////Start topological sort
 	//In order to set ID and PI
 	topologicalSort(R1, 1);
-	topologicalSort(R2, R1.netlist.size()+1);
+	topologicalSort(R2, R1.netlist.size() + 1);
 	topologicalSort(G1, R2.netlist.size() + R1.netlist.size() + 1);
 
 	//Set all nodes Primary Input
@@ -275,7 +276,7 @@ void loadFile(Graph& graph, char* argv)
 
 	ifstream infile(argv); //replace by argv[]
 	vector<Node*> assign; //optimize assign name
-
+	graph.Constants.resize(2);
 	string verilog_command;
 	//load R1.v
 	while (1) {
@@ -349,6 +350,10 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 
 		if (!isexist) {  // not exist
 			Node* req = initialNewnode(split_command, -1, graph.name);
+			if (split_command == "1'b0")
+				graph.Constants[0] = req;
+			else if(split_command == "1'b1")
+				graph.Constants[1] = req;
 			graph.netlist.push_back(req);
 			if (count) {  //first node
 				currGate = req;
@@ -417,7 +422,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 					graph.netlist.push_back(newnode);
 				}
 				currGate->fanin.push_back(scanNode);
-				
+
 				//if currGate fanin is Pi then add to PIfanoutNode
 				if (scanNode->type == 9)
 					graph.PIFanoutNode.insert(currGate);
@@ -550,7 +555,7 @@ void setRandomSeed(Graph& R1, Graph& R2, Graph& G1)
 	}
 }
 
-void topologicalSort(Graph& graph,int idStart)
+void topologicalSort(Graph& graph, int idStart)
 {
 	stack<Node*> Stack;
 	map<Node*, bool> visited;
@@ -1048,7 +1053,7 @@ void graph2Blif(Node* originalNode, Node* goldenNode)
 	outputConst(outfile, faninConst);
 	netlist2Blif(outfile, internalNode);
 
-	buildMiter(outfile, originalNode, goldenNode,0);
+	buildMiter(outfile, originalNode, goldenNode, 0);
 
 	outfile << ".names " << "miter_0" << " output" << endl;
 	outfile << "1 1" << endl;
@@ -1156,7 +1161,7 @@ void node2Blif(ofstream& outfile, Node* currNode, int type)
 	}
 }
 
-void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden,int miterPos)
+void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden, int miterPos)
 {
 	/*vector<Node*> PO_goldenTemp = PO_golden;
 	vector<string> miter;
@@ -1178,12 +1183,12 @@ void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden,int miterP
 		}
 	}*/
 	//need to add
-	
+
 	outfile << ".names";
-	outfile << " " << PO_original->name + "_" + "G1"<<"_"<< toString(PO_golden->id);
+	outfile << " " << PO_original->name + "_" + "G1" << "_" << toString(PO_golden->id);
 	outfile << " " << PO_golden->name + "_" + "R2" << "_" << toString(PO_golden->id);
 
-	outfile << " " << "miter_"<< toString(miterPos) << endl;
+	outfile << " " << "miter_" << toString(miterPos) << endl;
 	//outfile xor gate
 	outfile << "01 1" << endl
 		<< "10 1" << endl;
@@ -1238,7 +1243,7 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 			G1backup.PIFanoutNode.insert(currNode);
 		G1backup.netlist.push_back(currNode);
 	}
-	
+
 
 	if (compareNetlist(matchInfo, R2backup, G1backup))
 		cout << "Patched G1 Success!" << endl;
@@ -1299,14 +1304,14 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 		for (int j = 0; j < R2backup.PI[i]->fanout.size(); ++j) {
 			Node* fanoutNode = R2backup.PI[i]->fanout[j];
 			if (!isVisitedR2[fanoutNode]) {
-				outputPatchDotNames(outfile, fanoutNode, "R2",matchInfo.matches);
+				outputPatchDotNames(outfile, fanoutNode, "R2", matchInfo.matches);
 				isVisitedR2[fanoutNode] = true;
 			}
 		}
 	}
 
 	for (int i = 0; i < G1backup.netlist.size(); ++i) {
-		if (!isVisitedG1[G1backup.netlist[i]] && G1backup.netlist[i]->type!=9 && matchInfo.originRemoveNode.find(G1backup.netlist[i]) == matchInfo.originRemoveNode.end())
+		if (!isVisitedG1[G1backup.netlist[i]] && G1backup.netlist[i]->type != 9 && matchInfo.originRemoveNode.find(G1backup.netlist[i]) == matchInfo.originRemoveNode.end())
 			outputPatchDotNames(outfile, G1backup.netlist[i], "G1", matchInfo.matches);
 	}
 
@@ -1317,22 +1322,22 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 
 	sort(R2backup.PO.begin(), R2backup.PO.end(), PONameCompare);
 	sort(G1backup.PO.begin(), G1backup.PO.end(), PONameCompare);
-	for (int i = 0;i < R2backup.PO.size(); ++i) {
-		buildMiter(outfile, G1backup.PO[i], R2backup.PO[i],i);
+	for (int i = 0; i < R2backup.PO.size(); ++i) {
+		buildMiter(outfile, G1backup.PO[i], R2backup.PO[i], i);
 	}
 
 	outfile << ".names";
 	for (int i = 0; i < R2backup.PO.size(); ++i) {
-		outfile<< " miter_" <<toString(i);
+		outfile << " miter_" << toString(i);
 	}
-	
+
 	if (R2backup.PO.size() > 1) {
 		outfile << " outputTmp" << endl;
 		for (int i = 0; i < R2backup.PO.size(); ++i) {
 			outfile << "0";
 		}
-		outfile << " 0"<<endl;
-		outfile <<".names"<< " outputTmp output" << endl << "1 1" << endl;
+		outfile << " 0" << endl;
+		outfile << ".names" << " outputTmp output" << endl << "1 1" << endl;
 	}
 	else {
 		outfile << " output" << endl;
@@ -1343,7 +1348,7 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	return SATsolver();
 }
 
-void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName,map<Node*,Node*>& matches)
+void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName, map<Node*, Node*>& matches)
 {
 	int type;
 	if (currNode->type == 10 || currNode->type == 9)
@@ -1360,7 +1365,7 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 
 	outfile << ".names";
 	stringstream ss;
-	
+
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		//check if currNode fanin is same in G1
 		if (matches.find(currNode->fanin[i]) != matches.end() && currGraphName == "G1") {
@@ -1373,8 +1378,8 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 		}
 
 		//if currNode fanin is not the PI
-		if (currNode->fanin[i]->type != 9) 
-			outfile << "_" + currGraphName << "_" <<ss.str();
+		if (currNode->fanin[i]->type != 9)
+			outfile << "_" + currGraphName << "_" << ss.str();
 		ss.clear();
 		ss.str("");
 	}
@@ -1383,7 +1388,7 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 	ss << currNode->id;
 	outfile << " " << currNode->name;
 	if (currNode->type != 9)
-		outfile << "_" + currGraphName<<"_"<< ss.str();
+		outfile << "_" + currGraphName << "_" << ss.str();
 
 	outfile << endl;
 	node2Blif(outfile, currNode, type);
