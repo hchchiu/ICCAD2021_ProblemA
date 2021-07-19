@@ -1306,6 +1306,7 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 		}
 	}*/
 
+	//Original Netlist PI
 	set<Node*>::iterator it = G1backup.PIFanoutNode.begin();
 	for (; it != G1backup.PIFanoutNode.end(); ++it) {
 		Node* fanoutNode = *it;
@@ -1315,7 +1316,7 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 		}
 	}
 
-	//golden netlist PI
+	//Golden Netlist PI
 	for (int i = 0; i < R2backup.PI.size(); ++i) {
 		for (int j = 0; j < R2backup.PI[i]->fanout.size(); ++j) {
 			Node* fanoutNode = R2backup.PI[i]->fanout[j];
@@ -1334,11 +1335,13 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	}
 	outputConst(outfile, existConst);
 
+	//output Golden Remove Node connect to Original Netlist 
 	for (int i = 0; i < G1backup.netlist.size(); ++i) {
 		if (!isVisitedG1[G1backup.netlist[i]] && G1backup.netlist[i]->type != 9 && matchInfo.originRemoveNode.find(G1backup.netlist[i]) == matchInfo.originRemoveNode.end())
 			outputPatchDotNames(outfile, G1backup.netlist[i], "G1", matchInfo.matches);
 	}
 
+	//output Golden Netlist internal node
 	for (int i = 0; i < R2backup.netlist.size(); ++i) {
 		if (!isVisitedR2[R2backup.netlist[i]] && R2backup.netlist[i]->type != 9)
 			outputPatchDotNames(outfile, R2backup.netlist[i], "R2", matchInfo.matches);
