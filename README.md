@@ -44,7 +44,7 @@
  	- [新增]  `compareNetlist`，將GoldenRemoveNode利用BLIF FILE接上Original並判斷是否一樣
  	- [新增]  `outputPatchDotNames`，用來輸出patch的BLIF FILE的.names
  	- [新增]  `toString`，將int轉為string
-2021/07/20 16:45
+- 2021/07/20 16:45
  	- [新增]  `generatePatchVerilog`，輸出patch
  	- [新增]  `generateInstruction`，產生patch指令
  	- [新增]  `getTypeString`，取得Gate String
