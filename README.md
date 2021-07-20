@@ -44,12 +44,17 @@
  	- [新增]  `compareNetlist`，將GoldenRemoveNode利用BLIF FILE接上Original並判斷是否一樣
  	- [新增]  `outputPatchDotNames`，用來輸出patch的BLIF FILE的.names
  	- [新增]  `toString`，將int轉為string
+2021/07/20 16:45
+ 	- [新增]  `generatePatchVerilog`，輸出patch
+ 	- [新增]  `generateInstruction`，產生patch指令
+ 	- [新增]  `getTypeString`，取得Gate String
+ 	- [新增]  `generateDeclare`，輸出變數宣告
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
 - [X] 利用Random Simulation做Compare
 - [X] 利用SAT做Compare
 - [ ] 解決 Random Simulation會造成Gate不見的問題(如:Meeting 06/21 pg.2)
-- [ ]  產生patch
+- [X]  產生patch
 
 
 ## abc
