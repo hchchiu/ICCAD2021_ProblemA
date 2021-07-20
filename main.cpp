@@ -24,6 +24,7 @@ struct Node
 	vector<Node*> fanin;
 	vector<Node*> fanout;
 	set <Node*> piset;
+	set <string> piset_str;
 	set <Node*> faninCone;
 	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
@@ -147,6 +148,8 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 bool compareNetlist(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //out .names to BLIF File for patch
 void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName, map<Node*, Node*>& matches);
+//check if this RemoveNode fanins exist in RemoveNode
+void checkRemoveNodeFaninExist(MatchInfo& matchInfo,Node* currNode, vector<Node*>& patchNode);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -481,6 +484,8 @@ void PiPoRecord(string str, Graph& graph)
 					graph.PI.push_back(req);
 					//req->piset.push_back(req);
 					req->piset.insert(req);
+					//add piset_str with string not Node*
+					req->piset_str.insert(req->name);
 					req->graphName = graph.name;
 				}
 				else if (type == "output") {
@@ -510,6 +515,8 @@ void PiPoRecord(string str, Graph& graph)
 				graph.PI.push_back(req);
 				//req->piset.push_back(req);
 				req->piset.insert(req);
+				//add piset_str with string not Node*
+				req->piset_str.insert(req->name);
 				req->graphName = graph.name;
 			}
 			else if (type == "output") {
@@ -627,6 +634,9 @@ void setNodePIsetandSeed(Graph& graph)
 				//set the PI to the PISET
 				Node* faninNode = currNode->fanin[j];
 				currNode->piset.insert(faninNode->piset.begin(), faninNode->piset.end());
+
+				//add piset_str with string not Node*
+				currNode->piset_str.insert(faninNode->piset_str.begin(), faninNode->piset_str.end());
 
 				//set fanin cone
 				currNode->faninCone.insert(faninNode->faninCone.begin(), faninNode->faninCone.end());
@@ -941,14 +951,16 @@ void randomSimulation(MatchInfo& matchInfo)
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
 				if (og_it->first->piset.size() == gd_it->first->piset.size()) {
-					graph2Blif(og_it->first, gd_it->first);
-					//call SAT solver
-					if (SATsolver()) {
-						cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
-						matchInfo.matches[gd_it->first] = og_it->first;
-						removeAllFanin(matchInfo, og_it->first, gd_it->first);
-						og_it = matchInfo.originRemoveNode.begin();
-						break;
+					if (og_it->first->piset_str == gd_it->first->piset_str) {//add this if condition
+						graph2Blif(og_it->first, gd_it->first);
+						//call SAT solver
+						if (SATsolver()) {
+							cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							matchInfo.matches[gd_it->first] = og_it->first;
+							removeAllFanin(matchInfo, og_it->first, gd_it->first);
+							og_it = matchInfo.originRemoveNode.begin();
+							break;
+						}
 					}
 				}
 			}
@@ -974,8 +986,6 @@ void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSa
 		}
 	}
 }
-
-
 
 bool seedIsDifferent(Node* origin, Node* golden)
 {
@@ -1242,21 +1252,28 @@ void abcBlif2CNF()
 void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 {
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
+	vector<Node*> patchNode;
 	Graph R2backup = R2;
 	Graph G1backup = G1;
+	//solve problem of Random Simulation
+	for (; it != matchInfo.goldenRemoveNode.end();) {
+		Node* currNode = it->first;
+		int ogSize = matchInfo.goldenRemoveNode.size();
+		checkRemoveNodeFaninExist(matchInfo,currNode, patchNode);
+		if (ogSize != matchInfo.goldenRemoveNode.size())
+			it = matchInfo.goldenRemoveNode.begin();
+		else
+			++it;
+	}
+
+	it = matchInfo.goldenRemoveNode.begin();
 	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
 		Node* currNode = it->first;
-		/*
-		for (int i = 0; i < currNode->fanin.size(); ++i) {
-			if (matchInfo.matches.find(currNode->fanin[i]) != matchInfo.matches.end()) {
-				matchInfo.matches[currNode->fanin[i]]->fanout.push_back(currNode);
-				currNode->fanin.push_back(matchInfo.matches[currNode->fanin[i]]);
-			}
-		}*/
 		if (faninIsPI(currNode))
 			G1backup.PIFanoutNode.insert(currNode);
 		G1backup.netlist.push_back(currNode);
 	}
+	
 
 
 	if (compareNetlist(matchInfo, R2backup, G1backup))
@@ -1330,8 +1347,9 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	//output Constant
 	vector<bool> existConst(2,false);
 	for (int i = 0; i < R2backup.Constants.size(); ++i) {
-		if (R2backup.Constants[i] != NULL || G1backup.Constants[i] != NULL)
+		if (R2backup.Constants[i] != NULL || G1backup.Constants[i] != NULL) {
 			existConst[i] = true;
+		}	
 	}
 	outputConst(outfile, existConst);
 
@@ -1373,6 +1391,15 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	outfile << ".end";
 	outfile.close();
 	return SATsolver();
+}
+
+void checkRemoveNodeFaninExist(MatchInfo& matchInfo,Node* currNode,vector<Node*>& patchNode)
+{
+	for (int i = 0; i < currNode->fanin.size(); ++i) {
+		if (matchInfo.goldenRemoveNode.find(currNode->fanin[i]) == matchInfo.goldenRemoveNode.end() &&
+			matchInfo.matches.find(currNode->fanin[i]) == matchInfo.matches.end ())
+			matchInfo.goldenRemoveNode[currNode->fanin[i]] = false;
+	}
 }
 
 void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName, map<Node*, Node*>& matches)
