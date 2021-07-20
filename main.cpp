@@ -149,7 +149,7 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //out .names to BLIF File for patch
 void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName, map<Node*, Node*>& matches);
 //check if this RemoveNode fanins exist in RemoveNode
-void checkRemoveNodeFaninExist(MatchInfo& matchInfo,Node* currNode, vector<Node*>& patchNode);
+void checkRemoveNodeFaninExist(MatchInfo& matchInfo, Node* currNode, vector<Node*>& patchNode);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -169,12 +169,14 @@ void createRectifyPair(Graph& R2, Graph& G1);
 bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node* origin, Node* golden);
 
+//tool function
 string toString(int trans) {
 	stringstream ss;
 	ss << trans;
 	return ss.str();
 };
-bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };//for vetor PO sort
+//for vetor PO sort
+bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
 /* Function Flow
 	---------------------------------------------------------
 	loadFile  ->   verilog2graph  ->   assignCommandTransform
@@ -270,7 +272,7 @@ int main(int argc, char* argv[])
 	*/
 	//check seed and do SAT solver
 	randomSimulation(matchInfo);
-	
+
 	//start create and verify patch
 	createPatch(matchInfo, R2, G1);
 
@@ -362,7 +364,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 			Node* req = initialNewnode(split_command, -1, graph.name);
 			if (split_command == "1'b0")
 				graph.Constants[0] = req;
-			else if(split_command == "1'b1")
+			else if (split_command == "1'b1")
 				graph.Constants[1] = req;
 			graph.netlist.push_back(req);
 			if (count) {  //first node
@@ -618,7 +620,7 @@ void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, st
 		if (!visited[nextNode])
 			topologicalSortUtil(graph, nextNode, visited, Stack);
 	}
-	if( node->name!="1'b0" && node->name != "1'b1")
+	if (node->name != "1'b0" && node->name != "1'b1")
 		Stack.push(node);
 }
 
@@ -1259,7 +1261,7 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 	for (; it != matchInfo.goldenRemoveNode.end();) {
 		Node* currNode = it->first;
 		int ogSize = matchInfo.goldenRemoveNode.size();
-		checkRemoveNodeFaninExist(matchInfo,currNode, patchNode);
+		checkRemoveNodeFaninExist(matchInfo, currNode, patchNode);
 		if (ogSize != matchInfo.goldenRemoveNode.size())
 			it = matchInfo.goldenRemoveNode.begin();
 		else
@@ -1273,8 +1275,6 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 			G1backup.PIFanoutNode.insert(currNode);
 		G1backup.netlist.push_back(currNode);
 	}
-	
-
 
 	if (compareNetlist(matchInfo, R2backup, G1backup))
 		cout << "Patched G1 Success!" << endl;
@@ -1302,14 +1302,11 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	map<Node*, bool> isVisitedG1;
 	map<Node*, bool> isVisitedR2;
 
-
-
 	for (int i = 0; i < G1backup.netlist.size(); ++i)
 		isVisitedG1[G1backup.netlist[i]] = false;
 
 	for (int i = 0; i < R2backup.netlist.size(); ++i)
 		isVisitedR2[R2backup.netlist[i]] = false;
-
 
 	//original netlist PI
 	/*
@@ -1334,6 +1331,8 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	}
 
 	//Golden Netlist PI
+	//!!!!!
+	//here can optimize with PIFanoutNode
 	for (int i = 0; i < R2backup.PI.size(); ++i) {
 		for (int j = 0; j < R2backup.PI[i]->fanout.size(); ++j) {
 			Node* fanoutNode = R2backup.PI[i]->fanout[j];
@@ -1345,11 +1344,21 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	}
 
 	//output Constant
-	vector<bool> existConst(2,false);
+	vector<bool> existConst(2, false);
 	for (int i = 0; i < R2backup.Constants.size(); ++i) {
-		if (R2backup.Constants[i] != NULL || G1backup.Constants[i] != NULL) {
+		if (R2backup.Constants[i] != NULL)
 			existConst[i] = true;
-		}	
+		else if (G1backup.Constants[i] != NULL) {
+			//check if this const's fanout is not in the OriginalRemoveNode
+			//then we can output .name const
+			for (int j = 0; j < G1backup.Constants[i]->fanout.size(); ++j) {
+				Node* constFanoutNode = G1backup.Constants[i]->fanout[j];
+				if (matchInfo.originRemoveNode.find(constFanoutNode) == matchInfo.originRemoveNode.end()) {
+					existConst[i] = true;
+					break;
+				}
+			}
+		}
 	}
 	outputConst(outfile, existConst);
 
@@ -1393,11 +1402,11 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 	return SATsolver();
 }
 
-void checkRemoveNodeFaninExist(MatchInfo& matchInfo,Node* currNode,vector<Node*>& patchNode)
+void checkRemoveNodeFaninExist(MatchInfo& matchInfo, Node* currNode, vector<Node*>& patchNode)
 {
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		if (matchInfo.goldenRemoveNode.find(currNode->fanin[i]) == matchInfo.goldenRemoveNode.end() &&
-			matchInfo.matches.find(currNode->fanin[i]) == matchInfo.matches.end ())
+			matchInfo.matches.find(currNode->fanin[i]) == matchInfo.matches.end())
 			matchInfo.goldenRemoveNode[currNode->fanin[i]] = false;
 	}
 }
@@ -1433,7 +1442,7 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 		//if currNode fanin is not the PI
 		if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1") {
 			outfile << "_" + currGraphName;
-			if (currNode->fanin[i]->type != 10 )
+			if (currNode->fanin[i]->type != 10)
 				outfile << "_" << ss.str();
 		}
 
@@ -1445,8 +1454,8 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 	outfile << " " << currNode->name;
 	if (currNode->type != 9) {
 		outfile << "_" + currGraphName;
-		if(currNode->type != 10)
-			outfile<<"_"<< toString(currNode->id);
+		if (currNode->type != 10)
+			outfile << "_" << toString(currNode->id);
 	}
 
 	outfile << endl;
