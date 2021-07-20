@@ -48,7 +48,7 @@
 - [X] 利用Graph的Netlist做Structure Compare
 - [X] 利用Random Simulation做Compare
 - [X] 利用SAT做Compare
-- [ ] 解決 Random Simulation會造成Gate不見的問題(如:Meeting 06/21 pg.2)
+- [X] 解決 Random Simulation會造成Gate不見的問題(如:Meeting 06/21 pg.2)
 - [ ]  產生patch
 
 
