@@ -28,7 +28,7 @@ struct Node
 	set <Node*> faninCone;
 	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
-	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
+	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO 
 	int realGate; // -1:default
 	int id;//for blif file
 };
@@ -290,6 +290,8 @@ int main(int argc, char* argv[])
 
 	//start create and verify patch
 	createPatch(matchInfo, R2, G1);
+
+	//output the patch.v
 	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
 }
 
@@ -962,6 +964,7 @@ void randomSimulation(MatchInfo& matchInfo)
 {
 	map<Node*, bool>::iterator gd_it = matchInfo.goldenRemoveNode.begin();
 	map<Node*, bool>::iterator og_it = matchInfo.originRemoveNode.begin();
+
 	for (; og_it != matchInfo.originRemoveNode.end(); ++og_it) {
 		gd_it = matchInfo.goldenRemoveNode.begin();
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
@@ -1051,7 +1054,7 @@ void outputBlif(ofstream& outfile, Node* originalNode, Node* goldenNode)
 
 	//write -> ".inputs ..."
 	outfile << ".inputs";
-	/*set<Node*> tmp = originalNode->piset.size() > goldenNode->piset.size() ? originalNode->piset : goldenNode->piset;
+	/*set<Node*> tmp = originalNode->piset;
 	for (const auto& it : tmp) {
 		outfile << " " << it->name;
 		//std::cout << it->name << " ";
@@ -1062,6 +1065,7 @@ void outputBlif(ofstream& outfile, Node* originalNode, Node* goldenNode)
 		outfile << " " << (*it)->name;
 		//cout << " " << (*it)->name;
 	}
+
 	outfile << endl;
 	//write -> ".outputs ..."
 	outfile << ".outputs " << "output";
@@ -1429,6 +1433,8 @@ void checkRemoveNodeFaninExist(MatchInfo& matchInfo, Node* currNode, vector<Node
 void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName, map<Node*, Node*>& matches)
 {
 	int type;
+	stringstream ss;
+
 	if (currNode->type == 10 || currNode->type == 9)
 		type = currNode->realGate;
 	else
@@ -1440,9 +1446,8 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 		<< " " << currNode->fanin[1]->name + "_" + currNode->graphName
 		<< " " << currNode->name + "_" + currNode->graphName << endl;*/
 
-
 	outfile << ".names";
-	stringstream ss;
+	
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		//check if currNode fanin is same in G1
 		if (matches.find(currNode->fanin[i]) != matches.end() && currGraphName == "G1") {
@@ -1529,6 +1534,8 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 			output.insert(ptr);
 			nameReq[2] = ptr->name;
 		}
+		if (ptr->name == "1'b1" || ptr->name == "1'b0")
+			continue;
 		instructions.push_back(generateInstruction(ptr, nameReq,eco++));
 	}
 
