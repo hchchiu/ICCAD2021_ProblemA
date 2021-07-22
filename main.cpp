@@ -216,13 +216,16 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
    ------------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
-	randomSimulation  ->  outputBlif  ->  graph2Blif  ->  outputPIwithFaninCone  ->  node2Blif
-											   .	  ->  outputConst
-											   .	  ->  netlist2Blif  ->  node2Blif
+	randomSimulation  ->  graph2Blif  ->  outputBlif 
+							  .	      ->  outputPIwithFaninCone  ->  node2Blif	   	  
+							  .	      ->  outputConst
+							  .	      ->  netlist2Blif  ->  node2Blif
 							  .		  ->  buildMiter
+
 			.		  ->  SATsolver   ->  abcBlif2CNF
 							  .	      ->  readSATsolverResult
 			.		  ->  removeAllFanin
+			.		  ->  seedIsDifferent
    -------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
