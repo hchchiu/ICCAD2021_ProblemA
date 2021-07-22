@@ -155,11 +155,11 @@ void checkRemoveNodeFaninExist(MatchInfo& matchInfo, Node* currNode, vector<Node
 // generate patch verilog
 void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv);
 // generate verilog instruction
-string generateInstruction(Node* node, vector<string> names,int eco);
+string generateInstruction(Node* node, vector<string> names, int eco, int& cost);
 // get type string
 string getTypeString(int type);
 // outfile declare variable
-void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile);
+void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile,int &cost);
 
 // Output patch
 void outFile(Graph graph, char* argv);
@@ -1447,7 +1447,7 @@ void outputPatchDotNames(ofstream& outfile, Node* currNode, string currGraphName
 		<< " " << currNode->name + "_" + currNode->graphName << endl;*/
 
 	outfile << ".names";
-	
+
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		//check if currNode fanin is same in G1
 		if (matches.find(currNode->fanin[i]) != matches.end() && currGraphName == "G1") {
@@ -1506,67 +1506,104 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 	set<Node*> output;
 	map<Node*, string> inputDeclare;
 	map<Node*, string> outputDeclare;
-	map<Node*, string> newWire;
+	map<Node*, string> newGate;
 	map<Node*, bool> goldenRemoveNode = matchInfo.goldenRemoveNode;
 	vector<string> instructions;
+	map<string, bool> useConst;
+	useConst["1'b0"] = false;
+	useConst["1'b1"] = false;
 	int eco = 1;
-	for (map<Node*,bool>::iterator it= goldenRemoveNode.begin(); it!= goldenRemoveNode.end(); ++it) {
-		Node* ptr = it->first;
-		vector<string> nameReq = { "","","n" + ptr->name }; // [0]:fanin1 [1]:fanin2 [2]:node.name
-		for (int i = 0; i < ptr->fanin.size(); i++) {
-			nameReq[i] = "n" + ptr->fanin[i]->name;
-			if (matchInfo.matches.find(ptr->fanin[i]) != matchInfo.matches.end()) {
-				input.insert(matchInfo.matches.find(ptr->fanin[i])->second);
-				nameReq[i] = matchInfo.matches.find(ptr->fanin[i])->second->name;
+	int cost = 0;
+	for (map<Node*, bool>::iterator it = goldenRemoveNode.begin(); it != goldenRemoveNode.end(); ++it) {
+		Node* curr = it->first;
+		vector<string> names = { "","",""}; // [0]:fanin1 [1]:fanin2 [2]:node.name
+		// fanin
+		for (int i = 0; i < curr->fanin.size(); i++) {
+			Node* fanin = curr->fanin[i];
+			if (fanin->name == "1'b0" || fanin->name == "1'b1") {
+				names[i] = fanin->name;
+				if (!useConst[fanin->name]) {
+					cost += 1;
+					useConst[fanin->name] = true;
+				}
 			}
-			else if(newWire.find(ptr->fanin[i]) == newWire.end())
-				newWire[ptr->fanin[i]] = nameReq[i];
-			if(nameReq[i].find('[')!=string::npos)
-				nameReq[i]= "\\"+nameReq[i];
-			if(ptr->fanin[i]->name=="1'b1"|| ptr->fanin[i]->name=="1'b0")
-				nameReq[i] = ptr->fanin[i]->name;
+			else if (matchInfo.matches.find(fanin) != matchInfo.matches.end()) { //have match ((PI and match gate
+				Node* realfanin = matchInfo.matches.find(fanin)->second;
+				if (realfanin->name.find('[') != string::npos)
+					names[i] = "\\" + realfanin->name;
+				else
+					names[i] = realfanin->name;
+				inputDeclare[realfanin]=names[i];
+			}
+			else {
+				string faninName="n"+fanin->name;
+				if (fanin->type == 10) { //PO
+					if (fanin->name.find("[") != string::npos)
+						faninName = "\\" + fanin->name;
+					else
+						faninName = fanin->name;
+					if(matchInfo.goldenRemoveNode.find(fanin)!=matchInfo.goldenRemoveNode.end()){
+						faninName += "_in";
+					}
+					inputDeclare[fanin]=faninName;
+				}
+				names[i] = faninName;
+			}
 		}
-		if (it->first->type != 10 && newWire.find(it->first) == newWire.end()) {
-			newWire[it->first] = "n"+ptr->name;
-			nameReq[2] = "n" + ptr->name;
-		}
-		else if (it->first->type == 10) {
-			output.insert(ptr);
-			nameReq[2] = ptr->name;
-		}
-		if (ptr->name == "1'b1" || ptr->name == "1'b0")
+		// node
+		if (curr->name == "1'b0" || curr->name == "1'b1")
 			continue;
-		instructions.push_back(generateInstruction(ptr, nameReq,eco++));
+		else if (curr->type == 10) {
+			string name = curr->name;
+			if (name.find("[") != string::npos)
+				name = "\\" + name;
+			names[2] = name;
+			//newGate[curr] = name;
+			outputDeclare[curr]=name;
+		}
+		else if(curr->type==9){
+			cout<<"ERROR IN GENERATE PATCH VERILOG!!";
+		}
+		else if(curr->name=="1'b0" || curr->name=="1'b1")
+			continue;
+		else{
+			string name = "n"+curr->name;
+			if(name.find("[")!=string::npos){
+				string req=name.substr(name.find("[")+1,name.find("]")-name.find("[")-1);
+				name=name.substr(name.find("[")-1,name.size())+req;
+			}
+			names[2] = name;
+			newGate[curr] = name;
+		}
+		instructions.push_back(generateInstruction(curr, names, eco++, cost));
 	}
 
 	outfile << "module top_eco(";
-	for (set<Node*>::iterator it = input.begin(); it != input.end(); ++it) {
-		Node* access = *it;
-		inputDeclare[access] = "1";
-		outfile << access->name << ", ";
+	for (map<Node*, string>::iterator it = inputDeclare.begin(); it != inputDeclare.end(); ++it) {
+		outfile << it->second << ", ";
 	}
 	int last = 1;
-	for (set<Node*>::iterator it = output.begin(); it != output.end(); ++it) {
-		Node* access = *it;
-		outputDeclare[access] = "1";
-		if(last !=output.size())
-			outfile << access->name << ", ";
+	for (map<Node*, string>::iterator it = outputDeclare.begin(); it != outputDeclare.end(); ++it) {
+		if (last != outputDeclare.size())
+			outfile << it->second << ", ";
 		else
-			outfile << access->name << ");\n";
+			outfile << it->second << ");\n";
 		last++;
 	}
-	
-	generateDeclare(inputDeclare, "input", outfile);
-	generateDeclare(outputDeclare, "output", outfile);
-	generateDeclare(newWire, "wire", outfile);
+
+	generateDeclare(inputDeclare, "input", outfile,cost);
+	generateDeclare(outputDeclare, "output", outfile,cost);
+	generateDeclare(newGate, "wire", outfile,cost);
 
 	for (int i = 0; i < instructions.size(); i++)
 		outfile << instructions[i] << "\n";
-	outfile << "endmodule";
+	outfile << "endmodule\n";
+	outfile << "// cost:" << cost;
+	cout << "// cost:" << cost<<"\n";
 	int i = 0;
 }
 
-string generateInstruction(Node* node, vector<string> names,int eco)
+string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 {
 	string gate = getTypeString(node->type);
 	string res = "  ";
@@ -1575,12 +1612,14 @@ string generateInstruction(Node* node, vector<string> names,int eco)
 	if (gate == "PO")
 		gate = getTypeString(node->realGate);
 
-	if (gate == "not" || gate == "buf")
+	if (gate == "not" || gate == "buf") {
 		res += gate + " eco" + ss.str() + " (" + names[2] + ", " + names[0] + ");";
+		cost += -1;
+	}
 	else if (gate == "assign")
 		res += gate + " " + names[2] + " = " + names[0] + ";";
 	else
-		res += gate + " eco" + ss.str() + " (" + names[2] + ", " + names[0]+", " + names[1] + ");";
+		res += gate + " eco" + ss.str() + " (" + names[2] + ", " + names[0] + ", " + names[1] + ");";
 	return res;
 }
 
@@ -1590,27 +1629,30 @@ string getTypeString(int type)
 	return gates[type];
 }
 
-void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile)
+void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, int& cost)
 {
 	int last = 1;
 	int count = 0;
 	for (map<Node*, string>::iterator it = maps.begin(); it != maps.end(); ++it) {
 		if (count == 0)
-			outfile << "  "+types+" ";
+			outfile << "  " + types + " ";
 		if (last == maps.size() || count == 4) {
-			if(types=="wire")
+			outfile << it->second << ";\n";
+			/*if (types == "wire")
 				outfile << it->second << ";\n";
 			else
-				outfile << it->first->name << ";\n";
+				outfile << it->first->name << ";\n";*/
 		}
 		else {
-			if(types=="wire")
+			outfile << it->second << ", ";
+			/*if (types == "wire")
 				outfile << it->second << ", ";
 			else
-				outfile << it->first->name << ", ";
+				outfile << it->first->name << ", ";*/
 		}
 		count++;
 		last++;
+		cost += 1;
 		if (count == 5)
 			count = 0;
 	}

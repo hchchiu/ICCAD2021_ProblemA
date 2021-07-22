@@ -49,6 +49,12 @@
  	- [新增]  `generateInstruction`，產生patch指令
  	- [新增]  `getTypeString`，取得Gate String
  	- [新增]  `generateDeclare`，輸出變數宣告
+- 2021/07/22 16:33
+	- [修改]  `generatePatchVerilog`，修副宣告bus前要加`\`
+	- [修改]  `generatePatchVerilog`，修復constant移除在wire宣告問題
+	- [修改]  `generatePatchVerilog`，修復PO當成輸入輸出的宣告及命名方式
+	- [新增]  `generatePatchVerilog`，產生cost計算
+
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
 - [X] 利用Random Simulation做Compare
