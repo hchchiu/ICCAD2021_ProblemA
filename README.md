@@ -80,11 +80,7 @@ g++ -g -o blif2cnf.out blif2cnf.o ../libabc.a -lm -ldl -lreadline -lpthread
 make config prefix=$PREFIX(/home/usr/minisat)
 make install
 ```
-### 執行
-```bash
-export  LD_LIBRARY_PATH="/usr/local/lib" 
-export  LD_LIBRARY_PATH=$HOME/cada0047_beta/minisat-master/lib/
-```
+
 
 ## How to Compile
 ```bash
