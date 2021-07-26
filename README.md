@@ -67,23 +67,23 @@
 ## abc
 ### Compile 在src資料夾中
 ```bash
-gcc -Wall -g -c check_blif.c -o blif2cnf.o
-g++ -g -o blif2cnf.out blif2cnf.o ../libabc.a -lm -ldl -lreadline -lpthread
+$ gcc -Wall -g -c check_blif.c -o blif2cnf.o
+$ g++ -g -o blif2cnf.out blif2cnf.o ../libabc.a -lm -ldl -lreadline -lpthread
 ```
 ### 執行
 ```bash
-./src/.exe filename 
+$ ./src/.exe filename 
 ```
 ## minisat
 ### Compile
 ```bash
-make config prefix=$PREFIX(/home/usr/minisat)
-make install
+$ make config prefix=$PREFIX(/home/usr/minisat)
+$ make install
 ```
 
 
 ## How to Compile
 ```bash
-export  LD_LIBRARY_PATH=$HOME/cada0047_beta/minisat-master/lib/
-g++ --std=c++0x main.cpp -o cada0047_beta
+$ export  LD_LIBRARY_PATH=$HOME/cada0047_beta/minisat-master/lib/
+$ g++ --std=c++0x main.cpp -o cada0047_beta
 ```
