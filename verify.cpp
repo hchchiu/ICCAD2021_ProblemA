@@ -27,7 +27,7 @@ struct Node
 	set <Node*> faninCone;
 	string graphName;//Graph name :R1,R2,G1
 	unsigned* seeds;
-	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO 
+	int type; //0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO 11:const
 	int realGate; // -1:default
 	int id;//for blif file
 };
@@ -135,7 +135,10 @@ int main(int argc, char* argv[])
 	//start verify
 	Graph patchedG1;
 	loadFile(patchedG1, "patchG1.v");
-	compareNetlist(R2, patchedG1);
+	if (compareNetlist(R2, patchedG1))
+		cout << "Patched G1 Verify Success!" << endl;
+	else
+		cout << "Patched G1 Verify Error!" << endl;
 
 }
 
@@ -219,10 +222,14 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 
 		if (!isexist) {  // not exist
 			Node* req = initialNewnode(split_command, -1, graph.name);
-			if (split_command == "1'b0")
+			if (split_command == "1'b0") {
 				graph.Constants[0] = req;
-			else if (split_command == "1'b1")
+				req->type = 11;
+			}
+			else if (split_command == "1'b1") {
 				graph.Constants[1] = req;
+				req->type = 11;
+			}
 			graph.netlist.push_back(req);
 			if (count) {  //first node
 				currGate = req;
@@ -680,15 +687,17 @@ bool compareNetlist(Graph& R2, Graph& patchedG1)
 	}
 	outputConst(outfile, existConst);
 
-	//output Golden Remove Node connect to Original Netlist 
+	//output Original Netlist internal node
 	for (int i = 0; i < patchedG1.netlist.size(); ++i) {
-		if (!isVisitedG1[patchedG1.netlist[i]] && patchedG1.netlist[i]->type != 9)
+		if (!isVisitedG1[patchedG1.netlist[i]] && patchedG1.netlist[i]->type != 9 
+			&& patchedG1.netlist[i]->type != 11)
 			outputDotNames(outfile, patchedG1.netlist[i], "G1");
 	}
 
 	//output Golden Netlist internal node
 	for (int i = 0; i < R2.netlist.size(); ++i) {
-		if (!isVisitedR2[R2.netlist[i]] && R2.netlist[i]->type != 9)
+		if (!isVisitedR2[R2.netlist[i]] && R2.netlist[i]->type != 9
+			&& R2.netlist[i]->type != 11)
 			outputDotNames(outfile, R2.netlist[i], "R2");
 	}
 
@@ -732,7 +741,7 @@ void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 	outfile << ".names";
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		outfile << " " << currNode->fanin[i]->name;
-		if (currNode->fanin[i]->type != 9)
+		if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->type != 11)
 			outfile << "_" + currGraphName;
 	}
 
