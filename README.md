@@ -54,6 +54,11 @@
 	- [修改]  `generatePatchVerilog`，修復constant移除在wire宣告問題
 	- [修改]  `generatePatchVerilog`，修復PO當成輸入輸出的宣告及命名方式
 	- [新增]  `generatePatchVerilog`，產生cost計算
+- 2021/07/27 14:00
+	- [新增]  `verify.cpp`，產出patchG1.v
+	- [修改]  `generatePatchVerilog`，因wire有bus導致名稱異常問題(ex: y[3]3)
+	- [修改]  `verilog2graph`，因fanin大於2且輸出為PO，新增Node時造成讀取type而不是realGate
+	- [修改]  `verify.cpp`，修復當遇到Constant Node時，輸出指令的問題。
 
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
