@@ -78,11 +78,33 @@ void removeSingleFanout(Node* node, MatchInfo& info);
 // apply node
 void applyNode(Graph& patch, MatchInfo& info);
 // outfile
-void outputApplyG1(Graph& origin,MatchInfo& info);
+void outputApplyG1(Graph& origin, MatchInfo& info);
 //
 string generateInstruction(Node* node, int eco);
 //
 string getTypeString(int type);
+
+
+//start verify with minisat
+bool compareNetlist(Graph& R2, Graph& patchedG1);
+//node to blif
+void node2Blif(ofstream& outfile, Node* currNode, int type);
+//
+void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName);
+//
+void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden, int miterPos);
+//
+void outputConst(ofstream& outfile, vector<bool>& faninConst);
+void abcBlif2CNF();
+bool SATsolver();
+bool readSATsolverResult();
+
+//tool function
+string toString(int trans) {
+	stringstream ss;
+	ss << trans;
+	return ss.str();
+};
 
 int nWords = 1;
 int main(int argc, char* argv[])
@@ -97,13 +119,10 @@ int main(int argc, char* argv[])
 	//optimize netlist
 	Graph G1;
 	G1.name = "G1";
-	
-
 
 	loadFile(Patch, "patch.v");
 	loadFile(R2, "r2.v");
 	loadFile(G1, "g1.v");
-
 
 	MatchInfo info;
 	configurePatch(Patch);
@@ -112,6 +131,12 @@ int main(int argc, char* argv[])
 	applyNode(Patch, info);
 	outputApplyG1(G1, info);
 	int i = 0;
+
+	//start verify
+	Graph patchedG1;
+	loadFile(patchedG1, "patchG1.v");
+	compareNetlist(R2, patchedG1);
+
 }
 
 
@@ -396,7 +421,7 @@ Node* initialNewnode(string name, int type, string graphName) {
 void configurePatch(Graph& graph)
 {
 	for (int i = 0; i < graph.PI.size(); i++) {
-		if (graph.PI[i]->name.find("\\")!=string::npos)
+		if (graph.PI[i]->name.find("\\") != string::npos)
 			graph.PI[i]->name = graph.PI[i]->name.substr(1, graph.PI[i]->name.size());
 		/*if(graph.PI[i]->name.find("_in") != string::npos)
 			graph.PI[i]->name = graph.PI[i]->name.substr(0, graph.PI[i]->name.find("_in"));*/
@@ -486,7 +511,7 @@ void applyNode(Graph& patch, MatchInfo& info)
 					info.matches.find(patchNode)->second->fanout.push_back(origin);
 				}
 				else {
-					Node* newnode = initialNewnode(patchNode->name, patchNode->type,"");
+					Node* newnode = initialNewnode(patchNode->name, patchNode->type, "");
 					info.netlist[newnode] = true;
 					info.matches[patchNode] = newnode;
 					info.originMatch[newnode] = true;
@@ -502,7 +527,7 @@ void applyNode(Graph& patch, MatchInfo& info)
 			if (info.matches.find(patch.netlist[i]) != info.matches.end())
 				originNode = info.matches.find(patch.netlist[i])->second;
 			else {
-				originNode= initialNewnode(patchNode->name, patchNode->type, "");
+				originNode = initialNewnode(patchNode->name, patchNode->type, "");
 				info.netlist[originNode] = true;
 				info.matches[patchNode] = originNode;
 				info.originMatch[originNode] = true;
@@ -529,7 +554,7 @@ void applyNode(Graph& patch, MatchInfo& info)
 	int k = 0;
 }
 
-void outputApplyG1(Graph& origin,MatchInfo& info)
+void outputApplyG1(Graph& origin, MatchInfo& info)
 {
 	ofstream outfile("patchG1.v");
 	int eco = 1;
@@ -562,9 +587,9 @@ void outputApplyG1(Graph& origin,MatchInfo& info)
 		if (record == 5)
 			record = -1;
 	}
-	for (map<Node*, bool>::iterator it=info.netlist.begin(); it != info.netlist.end(); ++it) {
+	for (map<Node*, bool>::iterator it = info.netlist.begin(); it != info.netlist.end(); ++it) {
 		if (it->first->type != 9) {
-			outfile<<generateInstruction(it->first, eco++)<<"\n";
+			outfile << generateInstruction(it->first, eco++) << "\n";
 		}
 	}
 	outfile << "endmodule";
@@ -593,4 +618,212 @@ string getTypeString(int type)
 {
 	vector<string> gates = { "not","and","or","nand","nor","xor","xnor","buf","assign","PI","PO" };
 	return gates[type];
+}
+
+bool compareNetlist(Graph& R2, Graph& patchedG1)
+{
+	ofstream outfile("./blif/check.blif");
+
+	//write -> ".model check"
+	outfile << ".model check" << endl;
+
+	//write -> ".inputs ..."
+	outfile << ".inputs";
+	for (int i = 0; i < R2.PI.size(); ++i) {
+		outfile << " " << R2.PI[i]->name;
+	}
+	outfile << endl;
+
+	//write -> ".outputs ..."
+	outfile << ".outputs " << "output";
+	outfile << endl;
+
+	map<Node*, bool> isVisitedG1;
+	map<Node*, bool> isVisitedR2;
+	for (int i = 0; i < patchedG1.netlist.size(); ++i)
+		isVisitedG1[patchedG1.netlist[i]] = false;
+
+	for (int i = 0; i < R2.netlist.size(); ++i)
+		isVisitedR2[R2.netlist[i]] = false;
+
+	//Original Netlist PI
+	set<Node*>::iterator it = patchedG1.PIFanoutNode.begin();
+	for (; it != patchedG1.PIFanoutNode.end(); ++it) {
+		Node* fanoutNode = *it;
+		outputDotNames(outfile, fanoutNode, "G1");
+		isVisitedG1[fanoutNode] = true;
+	}
+
+	//Golden Netlist PI
+	it = R2.PIFanoutNode.begin();
+	for (; it != R2.PIFanoutNode.end(); ++it) {
+		Node* fanoutNode = *it;
+		outputDotNames(outfile, fanoutNode, "R2");
+		isVisitedR2[fanoutNode] = true;
+	}
+
+	//output Constant
+	vector<bool> existConst(2, false);
+	for (int i = 0; i < R2.Constants.size(); ++i) {
+		if (R2.Constants[i] != nullptr || patchedG1.Constants[i] != nullptr)
+			existConst[i] = true;
+	}
+	outputConst(outfile, existConst);
+
+	//output Golden Remove Node connect to Original Netlist 
+	for (int i = 0; i < patchedG1.netlist.size(); ++i) {
+		if (!isVisitedG1[patchedG1.netlist[i]] && patchedG1.netlist[i]->type != 9)
+			outputDotNames(outfile, patchedG1.netlist[i], "G1");
+	}
+
+	//output Golden Netlist internal node
+	for (int i = 0; i < R2.netlist.size(); ++i) {
+		if (!isVisitedR2[R2.netlist[i]] && R2.netlist[i]->type != 9)
+			outputDotNames(outfile, R2.netlist[i], "R2");
+	}
+
+	for (int i = 0; i < R2.PO.size(); ++i) {
+		buildMiter(outfile, patchedG1.PO[i], R2.PO[i], i);
+	}
+
+	outfile << ".names";
+	for (int i = 0; i < R2.PO.size(); ++i) {
+		outfile << " miter_" << toString(i);
+	}
+
+	if (R2.PO.size() > 1) {
+		outfile << " outputTmp" << endl;
+		for (int i = 0; i < R2.PO.size(); ++i) {
+			outfile << "0";
+		}
+		outfile << " 0" << endl;
+		outfile << ".names" << " outputTmp output" << endl << "1 1" << endl;
+	}
+	else {
+		outfile << " output" << endl;
+		outfile << "1 1" << endl;
+	}
+	outfile << ".end";
+	outfile.close();
+
+	//call minisat and return result
+	return SATsolver();
+}
+
+void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
+{
+	int type;
+	if (currNode->type == 10 || currNode->type == 9)
+		type = currNode->realGate;
+	else
+		type = currNode->type;
+
+	outfile << ".names";
+	for (int i = 0; i < currNode->fanin.size(); ++i) {
+		outfile << " " << currNode->fanin[i]->name;
+		if (currNode->fanin[i]->type != 9)
+			outfile << "_" + currGraphName;
+	}
+
+	outfile << " " << currNode->name;
+	if (currNode->type != 9)
+		outfile << "_" + currGraphName;
+
+	outfile << endl;
+	node2Blif(outfile, currNode, type);
+}
+
+void node2Blif(ofstream& outfile, Node* currNode, int type)
+{
+	//0:not 1:and 2:or 3:nand 4:nor 5:xor 6:xnor 7:buf 8:assign 9:PI 10:PO
+
+	if (currNode->fanin.size() > 1) {
+		//and gate
+		if (type == 1)
+			outfile << "11 1" << endl;
+		//or gate
+		else if (type == 2) {
+			outfile << "-1 1" << endl
+				<< "1- 1" << endl;
+		}
+		//nand gate
+		else if (type == 3) {
+			outfile << "0- 1" << endl
+				<< "10 1" << endl;
+		}
+		//nor gate
+		else if (type == 4) {
+			outfile << "00 1" << endl;
+		}
+		//xor gate
+		else if (type == 5) {
+			outfile << "01 1" << endl
+				<< "10 1" << endl;
+		}
+		//xnor gate
+		else if (type == 6) {
+			outfile << "00 1" << endl
+				<< "11 1" << endl;
+		}
+	}
+	else {
+		//not gate
+		if (type == 0) {
+			outfile << "0 1" << endl;
+		}
+		//buffer or assign
+		else if (type == 7 || type == 8) {
+			outfile << "1 1" << endl;
+		}
+	}
+}
+
+bool SATsolver()
+{
+	abcBlif2CNF();
+	system("./minisat ./cnf/check.cnf out.txt > minisatScreen.txt ");
+	if (readSATsolverResult())
+		return true;
+	return false;
+}
+
+void abcBlif2CNF()
+{
+	system("./blif2cnf.out ./blif/check.blif");
+}
+
+bool readSATsolverResult()
+{
+	ifstream infile("out.txt");
+	string result;
+	infile >> result;
+	infile.close();
+	if (result == "UNSAT")
+		return true;
+
+	return false;
+}
+
+void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden, int miterPos)
+{
+	outfile << ".names";
+	outfile << " " << PO_original->name + "_" + "G1";
+	outfile << " " << PO_golden->name + "_" + "R2";
+
+	outfile << " " << "miter_" << toString(miterPos) << endl;
+	//outfile xor gate
+	outfile << "01 1" << endl
+		<< "10 1" << endl;
+}
+
+void outputConst(ofstream& outfile, vector<bool>& faninConst)
+{
+	if (faninConst[0]) {
+		outfile << ".names 1'b0" << endl
+			<< "0" << endl;
+	}
+	if (faninConst[1]) {
+		outfile << ".names 1'b1" << endl
+			<< "1" << endl;
+	}
 }
