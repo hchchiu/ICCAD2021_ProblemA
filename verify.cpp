@@ -665,7 +665,7 @@ bool compareNetlist(Graph& R2, Graph& patchedG1)
 	//output Constant
 	vector<bool> existConst(2, false);
 	for (int i = 0; i < R2.Constants.size(); ++i) {
-		if (R2.Constants[i] != nullptr || patchedG1.Constants[i] != nullptr)
+		if (R2.Constants[i] != NULL || patchedG1.Constants[i] != NULL)
 			existConst[i] = true;
 	}
 	outputConst(outfile, existConst);
@@ -682,6 +682,7 @@ bool compareNetlist(Graph& R2, Graph& patchedG1)
 			outputDotNames(outfile, R2.netlist[i], "R2");
 	}
 
+	//build the miter
 	for (int i = 0; i < R2.PO.size(); ++i) {
 		buildMiter(outfile, patchedG1.PO[i], R2.PO[i], i);
 	}
