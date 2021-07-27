@@ -143,7 +143,7 @@ void abcBlif2CNF();
 
 
 //------ start create patch -------
-void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1);
+void patchVerify(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //check whether R2 and G1 are same after finishing  patch
 bool compareNetlist(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //out .names to BLIF File for patch
@@ -216,13 +216,26 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
    ------------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
-	randomSimulation  ->  outputBlif  ->  graph2Blif  ->  outputPIwithFaninCone  ->  node2Blif
-											   .	  ->  outputConst
-											   .	  ->  netlist2Blif  ->  node2Blif
+	randomSimulation  ->  graph2Blif  ->  outputBlif 
+							  .	      ->  outputPIwithFaninCone  ->  node2Blif	   	  
+							  .	      ->  outputConst
+							  .	      ->  netlist2Blif  ->  node2Blif
 							  .		  ->  buildMiter
-			.		  ->  SATsolver  ->  abcBlif2CNF
-							  .	     ->  readSATsolverResult
+
+			.		  ->  SATsolver   ->  abcBlif2CNF
+							  .	      ->  readSATsolverResult
 			.		  ->  removeAllFanin
+			.		  ->  seedIsDifferent
+   -------------------------------------------------------------------------------------
+	   |
+   -------------------------------------------------------------------------------------
+	patchVerify  ->  checkRemoveNodeFaninExist
+		.		 ->  faninIsPI
+		.		 ->  compareNetlist  ->  outputPatchDotNames
+						   .         ->  outputConst
+						   .         ->  buildMiter
+						   .         ->  SATsolver
+
    -------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
@@ -289,7 +302,7 @@ int main(int argc, char* argv[])
 	randomSimulation(matchInfo);
 
 	//start create and verify patch
-	createPatch(matchInfo, R2, G1);
+	patchVerify(matchInfo, R2, G1);
 
 	//output the patch.v
 	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
@@ -1270,7 +1283,7 @@ void abcBlif2CNF()
 	system("./blif2cnf.out ./blif/check.blif");
 }
 
-void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
+void patchVerify(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 {
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
 	vector<Node*> patchNode;
@@ -1326,18 +1339,6 @@ bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
 
 	for (int i = 0; i < R2backup.netlist.size(); ++i)
 		isVisitedR2[R2backup.netlist[i]] = false;
-
-	//original netlist PI
-	/*
-	for (int i = 0; i < G1backup.PI.size(); ++i) {
-		for (int j = 0; j < G1backup.PI[i]->fanout.size(); ++j) {
-			Node* fanoutNode = G1backup.PI[i]->fanout[j];
-			if (matchInfo.originRemoveNode.find(fanoutNode) == matchInfo.originRemoveNode.end() && !isVisitedG1[fanoutNode]) {
-				outputPatchDotNames(outfile, fanoutNode, "G1", matchInfo.matches);
-				isVisitedG1[fanoutNode] = true;
-			}
-		}
-	}*/
 
 	//Original Netlist PI
 	set<Node*>::iterator it = G1backup.PIFanoutNode.begin();
