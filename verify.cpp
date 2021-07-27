@@ -504,7 +504,7 @@ void applyNode(Graph& patch, MatchInfo& info)
 		else if (patch.netlist[i]->type == 10) {
 			Node* origin = info.matches.find(patch.netlist[i])->second;
 			origin->fanin.resize(patch.netlist[i]->fanin.size());
-			for (int j = 0; j < origin->fanin.size(); j++) {
+			for (int j = 0; j < patch.netlist[i]->fanin.size(); j++) {
 				Node* patchNode = patch.netlist[i]->fanin[j];
 				if (info.matches.find(patchNode) != info.matches.end()) {
 					origin->fanin[j] = info.matches.find(patchNode)->second;
@@ -587,7 +587,10 @@ void outputApplyG1(Graph& origin, MatchInfo& info)
 		if (record == 5)
 			record = -1;
 	}
-	for (map<Node*, bool>::iterator it = info.netlist.begin(); it != info.netlist.end(); ++it) {
+
+	for (map<Node*, bool>::iterator it=info.netlist.begin(); it != info.netlist.end(); ++it) {
+		if (it->first->name == "1'b0" || it->first->name == "1'b1")
+			continue;
 		if (it->first->type != 9) {
 			outfile << generateInstruction(it->first, eco++) << "\n";
 		}
@@ -597,12 +600,19 @@ void outputApplyG1(Graph& origin, MatchInfo& info)
 
 string generateInstruction(Node* node, int eco)
 {
+	if (node->type == -1)
+		system("pause");
 	string gate = getTypeString(node->type);
 	string res = "  ";
 	stringstream ss;
 	ss << eco;
-	if (gate == "PO")
+	if (gate == "PO") {
+		if (node->realGate == -1)
+			system("pause");
 		gate = getTypeString(node->realGate);
+	}
+
+	
 
 	if (gate == "not" || gate == "buf") {
 		res += gate + " eco" + ss.str() + " (" + node->name + ", " + node->fanin[0]->name + ");";
