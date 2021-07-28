@@ -175,8 +175,6 @@ bool typeAndNumberCompare(const Node& p1, const Node& p2);
 bool strTitleCompare(const string& p1, const string& p2);
 
 
-void createRectifyPair(Graph& R2, Graph& G1);
-bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node* origin, Node* golden);
 
 //tool function
@@ -187,6 +185,7 @@ string toString(int trans) {
 };
 //for vetor PO sort
 bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
+
 /* Function Flow
 	---------------------------------------------------------
 	loadFile  ->   verilog2graph  ->   assignCommandTransform
@@ -981,7 +980,7 @@ void randomSimulation(MatchInfo& matchInfo)
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
-							cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							//cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeAllFanin(matchInfo, og_it->first, gd_it->first);
 							og_it = matchInfo.originRemoveNode.begin();
@@ -1267,13 +1266,12 @@ bool readSATsolverResult()
 	infile.close();
 	if (result == "UNSAT")
 		return true;
-
 	return false;
 }
 
 void abcBlif2CNF()
 {
-	system("./blif2cnf.out ./blif/check.blif");
+	system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
 }
 
 void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
@@ -1301,10 +1299,13 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 		G1backup.netlist.push_back(currNode);
 	}
 
+	compareNetlist(matchInfo, R2backup, G1backup);
+	/*
 	if (compareNetlist(matchInfo, R2backup, G1backup))
 		cout << "Patched G1 Success!" << endl;
 	else
 		cout << "Patched G1 Error!" << endl;
+	*/
 }
 
 bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
@@ -1615,7 +1616,7 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 		outfile << instructions[i] << "\n";
 	outfile << "endmodule\n";
 	//outfile << "// cost:" << cost;
-	cout << "// cost:" << cost << "\n";
+	//cout << "// cost:" << cost << "\n";
 	int i = 0;
 }
 
