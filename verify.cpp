@@ -207,7 +207,8 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 			split_command = split_command.substr(1, split_command.size() - 1);
 		if (split_command[split_command.size() - 1] == ')') //delete right parentheses
 			split_command = split_command.substr(0, split_command.size() - 1);
-
+		while (split_command[split_command.size() - 1] == ' ') //delete front blank
+			split_command = split_command.substr(0, split_command.size() - 1);
 		// search this whether exist
 		for (int i = 0; i < graph.netlist.size(); i++)
 			if (graph.netlist[i]->name == split_command)
@@ -340,8 +341,10 @@ void PiPoRecord(string str, Graph& graph)
 		cc >> min_index;
 
 		while (getline(ss, split_command, ',')) {
-			if (split_command[0] == ' ') //delete front blank
+			while (split_command[0] == ' ') //delete front blank
 				split_command = split_command.substr(1, split_command.size() - 1);
+			while (split_command[split_command.size() - 1] == ' ') //delete front blank
+				split_command = split_command.substr(0, split_command.size() - 1);
 			for (int i = min_index; i <= max_index; i++) {
 				stringstream ss;
 				ss << i;
@@ -375,6 +378,8 @@ void PiPoRecord(string str, Graph& graph)
 		while (getline(ss, split_command, ',')) {
 			while (split_command[0] == ' ') //delete front blank
 				split_command = split_command.substr(1, split_command.size() - 1);
+			while (split_command[split_command.size() - 1] == ' ') //delete front blank
+				split_command = split_command.substr(0, split_command.size() - 1);
 			Node* req = new Node();
 			req->name = split_command;
 			req->realGate = -1;
@@ -595,7 +600,7 @@ void outputApplyG1(Graph& origin, MatchInfo& info)
 			record = -1;
 	}
 
-	for (map<Node*, bool>::iterator it=info.netlist.begin(); it != info.netlist.end(); ++it) {
+	for (map<Node*, bool>::iterator it = info.netlist.begin(); it != info.netlist.end(); ++it) {
 		if (it->first->name == "1'b0" || it->first->name == "1'b1")
 			continue;
 		if (it->first->type != 9) {
@@ -619,7 +624,7 @@ string generateInstruction(Node* node, int eco)
 		gate = getTypeString(node->realGate);
 	}
 
-	
+
 
 	if (gate == "not" || gate == "buf") {
 		res += gate + " eco" + ss.str() + " (" + node->name + ", " + node->fanin[0]->name + ");";
@@ -689,7 +694,7 @@ bool compareNetlist(Graph& R2, Graph& patchedG1)
 
 	//output Original Netlist internal node
 	for (int i = 0; i < patchedG1.netlist.size(); ++i) {
-		if (!isVisitedG1[patchedG1.netlist[i]] && patchedG1.netlist[i]->type != 9 
+		if (!isVisitedG1[patchedG1.netlist[i]] && patchedG1.netlist[i]->type != 9
 			&& patchedG1.netlist[i]->type != 11)
 			outputDotNames(outfile, patchedG1.netlist[i], "G1");
 	}
@@ -801,7 +806,7 @@ void node2Blif(ofstream& outfile, Node* currNode, int type)
 bool SATsolver()
 {
 	abcBlif2CNF();
-	system("./minisat ./cnf/check.cnf out.txt > minisatScreen.txt ");
+	system("./minisat ./cnf/check.cnf verify_out.txt > minisatScreen.txt ");
 	if (readSATsolverResult())
 		return true;
 	return false;
@@ -814,7 +819,7 @@ void abcBlif2CNF()
 
 bool readSATsolverResult()
 {
-	ifstream infile("out.txt");
+	ifstream infile("verify_out.txt");
 	string result;
 	infile >> result;
 	infile.close();
