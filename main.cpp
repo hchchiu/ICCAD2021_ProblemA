@@ -1,4 +1,4 @@
-#include<iostream>
+﻿#include<iostream>
 #include<fstream>
 #include<sstream>
 #include<time.h>
@@ -55,6 +55,7 @@ struct MatchInfo
 	vector<Node*> goldenNode; //the remains is matched
 	set<Node*> originSupprotSet; //record support set
 	set<Node*> goldenSupprotSet; //record support set
+	map<Node*, Node*> backmatches; //record PO to PI structure match and fanout only one
 };
 
 struct NameCompare
@@ -142,6 +143,16 @@ bool readSATsolverResult();
 void abcBlif2CNF();
 
 
+//PO to PI search
+void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo);
+//
+void backMatchProcessing(Graph origin, Graph golden, MatchInfo& matchInfo);
+//
+void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo);
+//
+bool checkGateTypeEqual(Node* origin, Node* golden);
+
+
 //------ start create patch -------
 void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //check whether R2 and G1 are same after finishing  patch
@@ -175,6 +186,8 @@ bool typeAndNumberCompare(const Node& p1, const Node& p2);
 bool strTitleCompare(const string& p1, const string& p2);
 
 
+void createRectifyPair(Graph& R2, Graph& G1);
+bool pisetIsDifferent(Node object, Node golden);
 bool seedIsDifferent(Node* origin, Node* golden);
 
 //tool function
@@ -185,7 +198,6 @@ string toString(int trans) {
 };
 //for vetor PO sort
 bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
-
 /* Function Flow
 	---------------------------------------------------------
 	loadFile  ->   verilog2graph  ->   assignCommandTransform
@@ -285,10 +297,12 @@ int main(int argc, char* argv[])
 	}
 	*/
 	//check seed and do SAT solver
-	randomSimulation(matchInfo);
+	//randomSimulation(matchInfo);
+
+	backStructureSearch(G1, R2, matchInfo);
 
 	//start create and verify patch
-	createPatch(matchInfo, R2, G1);
+	//createPatch(matchInfo, R2, G1);
 
 	//output the patch.v
 	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
@@ -980,7 +994,7 @@ void randomSimulation(MatchInfo& matchInfo)
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
-							//cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeAllFanin(matchInfo, og_it->first, gd_it->first);
 							og_it = matchInfo.originRemoveNode.begin();
@@ -1266,12 +1280,112 @@ bool readSATsolverResult()
 	infile.close();
 	if (result == "UNSAT")
 		return true;
+
 	return false;
 }
 
 void abcBlif2CNF()
 {
-	system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
+	system("./blif2cnf.out ./blif/check.blif");
+}
+
+void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo)
+{
+	map<string, Node*> originPoMap;
+	map<string, Node*> goldenPoMap;
+	for (int i = 0; i < origin.PO.size(); i++) {
+		Node* node = origin.PO[i];
+		if (matchInfo.originRemoveNode.find(node) != matchInfo.originRemoveNode.end())
+			originPoMap[node->name] = node;
+	}
+	for (int i = 0; i < golden.PO.size(); i++) {
+		Node* node = golden.PO[i];
+		if (matchInfo.goldenRemoveNode.find(node) != matchInfo.goldenRemoveNode.end())
+			goldenPoMap[node->name] = node;
+	}
+
+	for (map<string, Node*>::iterator it = originPoMap.begin(); it != originPoMap.end(); ++it) {
+		Node* originNode = it->second;
+		Node* goldenNode = nullptr;
+		if (matchInfo.originRemoveNode.find(originNode) == matchInfo.originRemoveNode.end())
+			continue;
+		if (goldenPoMap.find(it->first) != goldenPoMap.end())
+			goldenNode = goldenPoMap.find(it->first)->second;
+		if (goldenNode == nullptr || matchInfo.goldenRemoveNode.find(goldenNode) == matchInfo.goldenRemoveNode.end())
+			continue;
+		if(checkGateTypeEqual(originNode,goldenNode))
+			checkPOStructureEqual(originNode, goldenNode, matchInfo);
+	}
+
+	int k = 0;
+}
+
+
+void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
+{
+	map<Node*, bool> originFaninMap;
+	map<Node*, bool> goldenFaninMap;
+	map<Node*, Node*> matchNow;
+
+	for (int i = 0; i < origin->fanin.size(); i++) {
+		if (origin->fanin[i]->name == "1'b1" || origin->fanin[i]->name == "1'b0")
+			originFaninMap[origin->fanin[i]] = true;
+		else if (origin->fanin[i]->fanout.size() < 2 && matchInfo.originRemoveNode.find(origin->fanin[i])!=matchInfo.originRemoveNode.end())
+			originFaninMap[origin->fanin[i]] = true;
+	}
+
+	for (int i = 0; i < golden->fanin.size(); i++) {
+		if (golden->fanin[i]->name == "1'b1" || golden->fanin[i]->name == "1'b0")
+			goldenFaninMap[golden->fanin[i]] = true;
+		else if (golden->fanin[i]->fanout.size() < 2 && matchInfo.goldenRemoveNode.find(golden->fanin[i]) != matchInfo.goldenRemoveNode.end())
+			goldenFaninMap[golden->fanin[i]] = true;
+	}
+		
+
+	for (map<Node*, bool>::iterator goldenptr = goldenFaninMap.begin(); goldenptr != goldenFaninMap.end(); ++goldenptr) {
+		Node* originNode = nullptr;
+		Node* goldenNode = goldenptr->first;
+		for (map<Node*, bool>::iterator originptr = originFaninMap.begin(); originptr != originFaninMap.end(); ++originptr) {
+			originNode = originptr->first;
+			if (checkGateTypeEqual(originNode, goldenNode)) {
+				matchNow[goldenNode] = originNode;
+				originFaninMap.erase(originNode);
+				break;
+			}
+		}
+	}
+
+	if (matchNow.size() == origin->fanin.size()) {
+		matchInfo.matches[golden] = origin;
+		for (map<Node*, Node*>::iterator it = matchNow.begin(); it != matchNow.end(); ++it) {
+			Node* originNode = it->second;
+			Node* goldenNode = it->first;
+			if (originNode->name == "1'b1" || originNode->name == "1'b0")
+				continue;
+			checkPOStructureEqual(originNode, goldenNode, matchInfo);
+		}
+	}
+	else
+		matchInfo.backmatches[golden] = origin;
+
+	if (matchInfo.originRemoveNode.find(origin) != matchInfo.originRemoveNode.end())
+		matchInfo.originRemoveNode.erase(origin);
+	if (matchInfo.goldenRemoveNode.find(golden) != matchInfo.goldenRemoveNode.end())
+		matchInfo.goldenRemoveNode.erase(golden);
+
+}
+
+bool checkGateTypeEqual(Node* origin, Node* golden)
+{
+	if (origin->name == "1'b1" || origin->name == "1'b0")
+		if (origin->name != golden->name)
+			return false;
+	if (golden->name == "1'b1" || golden->name == "1'b0")
+		if (origin->name != golden->name)
+			return false;
+	if(origin->type!=golden->type || origin->realGate!=golden->realGate)
+		return false;
+	return true;
 }
 
 void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
@@ -1299,13 +1413,10 @@ void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 		G1backup.netlist.push_back(currNode);
 	}
 
-	compareNetlist(matchInfo, R2backup, G1backup);
-	/*
 	if (compareNetlist(matchInfo, R2backup, G1backup))
 		cout << "Patched G1 Success!" << endl;
 	else
 		cout << "Patched G1 Error!" << endl;
-	*/
 }
 
 bool compareNetlist(MatchInfo& matchInfo, Graph& R2backup, Graph& G1backup)
@@ -1542,6 +1653,14 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 					names[i] = realfanin->name;
 				inputDeclare[realfanin] = names[i];
 			}
+			else if (matchInfo.backmatches.find(fanin) != matchInfo.backmatches.end()) {
+				Node* realfanin = matchInfo.backmatches.find(fanin)->second;
+				if (realfanin->name.find('[') != string::npos)
+					names[i] = "\\" + realfanin->name + " ";
+				else
+					names[i] = realfanin->name;
+				inputDeclare[realfanin] = names[i];
+			}
 			else {
 				string faninName = "n" + fanin->name;
 				if (fanin->type == 10) { //PO
@@ -1562,7 +1681,7 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 				names[i] = faninName;
 			}
 		}
-		// node
+		// node+
 		if (curr->name == "1'b0" || curr->name == "1'b1")
 			continue;
 		else if (curr->type == 10) {
@@ -1590,17 +1709,57 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 		instructions.push_back(generateInstruction(curr, names, eco++, cost));
 	}
 
+	for (map<Node*, Node*>::iterator it = matchInfo.backmatches.begin(); it != matchInfo.backmatches.end(); ++it) {
+		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
+		Node* originNode = it->second;
+		Node* goldenNode = it->first;
+		if (originNode->name.find("[") != string::npos)
+			names[2] = "\\" + originNode->name + " ";
+		else
+			names[2] = originNode->name;
+		outputDeclare[originNode] = names[2];
+		for (int i = 0; i < goldenNode->fanin.size(); i++) {
+			if (goldenNode->fanin[i]->name == "1'b1" || goldenNode->fanin[i]->name == "1'b0")
+				names[i] = goldenNode->fanin[i]->name;
+			else if (matchInfo.matches.find(goldenNode->fanin[i]) != matchInfo.matches.end()) {
+				Node* node = matchInfo.matches.find(goldenNode->fanin[i])->second;
+				string name = node->name;
+				if (name.find('[') != string::npos)
+					name = "\\" + name + " ";
+				inputDeclare[node] = name;
+				names[i] = name;
+			}
+			else if (newGate.find(goldenNode->fanin[i]) != newGate.end()) {
+				names[i] = newGate.find(goldenNode->fanin[i])->second;
+			}
+			else if (matchInfo.backmatches.find(goldenNode->fanin[i]) != matchInfo.backmatches.end()) {
+				Node* node = matchInfo.backmatches.find(goldenNode->fanin[i])->second;
+				string name = node->name;
+				if (name.find('[') != string::npos)
+					name = "\\" + name + " ";
+				inputDeclare[node] = name;
+				names[i] = name;
+				cout << "ERROR\n";
+			}
+		}
+		instructions.push_back(generateInstruction(originNode, names, eco++, cost));
+	}
+
 	outfile << "module top_eco(";
 	map<Node*, string>::iterator it = inputDeclare.begin();
 	outfile << it->second;
 	++it;
 	for (; it != inputDeclare.end(); ++it) {
+		if (outputDeclare.find(it->first) != outputDeclare.end())
+			continue;
 		if (it->second.find("\\") == string::npos)
 			outfile << ", " << it->second;
 		else
 			outfile << "," << it->second;
 	}
 	for (it = outputDeclare.begin(); it != outputDeclare.end(); ++it) {
+		if (inputDeclare.find(it->first) != inputDeclare.end())
+			inputDeclare.erase(it->first);
 		if (it->second.find("\\") == string::npos)
 			outfile << ", " << it->second;
 		else
@@ -1616,7 +1775,7 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 		outfile << instructions[i] << "\n";
 	outfile << "endmodule\n";
 	//outfile << "// cost:" << cost;
-	//cout << "// cost:" << cost << "\n";
+	//cout << "// cost:" << cost<<"\n";
 	int i = 0;
 }
 
