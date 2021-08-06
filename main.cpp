@@ -994,7 +994,7 @@ void randomSimulation(MatchInfo& matchInfo)
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
-							cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							//cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeAllFanin(matchInfo, og_it->first, gd_it->first);
 							og_it = matchInfo.originRemoveNode.begin();
@@ -1286,7 +1286,7 @@ bool readSATsolverResult()
 
 void abcBlif2CNF()
 {
-	system("./blif2cnf.out ./blif/check.blif");
+	system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
 }
 
 void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo)
@@ -1775,7 +1775,7 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 		outfile << instructions[i] << "\n";
 	outfile << "endmodule\n";
 	//outfile << "// cost:" << cost;
-	//cout << "// cost:" << cost<<"\n";
+	cout << "// cost:" << cost<<"\n";
 	int i = 0;
 }
 
