@@ -17,7 +17,9 @@ using namespace std;
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
+
 // 556sdas...
+
 struct Node
 {
 	string name;
@@ -239,7 +241,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
    -------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
-	NewpatchVerify  ->  checkRemoveNodeFaninExist
+	patchVerify  ->  checkRemoveNodeFaninExist
 		.		 ->  faninIsPI
 		.		 ->  compareNetlist  ->  outputPatchDotNames
 						   .         ->  outputConst
