@@ -1165,7 +1165,6 @@ void outputConst(ofstream& outfile, vector<bool>& faninConst)
 		outfile << ".names 1'b1" << endl
 			<< "1" << endl;
 	}
-
 }
 
 void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
@@ -1187,7 +1186,7 @@ void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		if (currNode->fanin[i]->graphName == currGraphName) {
 			outfile << " " << currNode->fanin[i]->name;
-			if (currNode->fanin[i]->type != 9)
+			if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name !="1'b0" && currNode->fanin[i]->name != "1'b1")
 				outfile << "_" + currGraphName;
 		}
 	}
@@ -1211,8 +1210,7 @@ void node2Blif(ofstream& outfile, Node* currNode, int type)
 			outfile << "11 1" << endl;
 		//or gate
 		else if (type == 2) {
-			outfile << "-1 1" << endl
-				<< "1- 1" << endl;
+			outfile << "00 0" << endl;
 		}
 		//nand gate
 		else if (type == 3) {
@@ -2058,6 +2056,7 @@ void patchOptimize(MatchInfo& matchInfo)
 	Graph currPatchGraph;
 	map<Node*, bool> isVisitedPatch;
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
+	currPatchGraph.Constants.resize(2);
 	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
 		//push all golden remove node to currPatchGraph and isVisitedPatch
 		currPatchGraph.netlist.push_back(it->first);
@@ -2066,9 +2065,15 @@ void patchOptimize(MatchInfo& matchInfo)
 		for (int i = 0; i < it->first->fanin.size(); ++i) {
 			Node* faninNode = it->first->fanin[i];
 			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end()) {
-				currPatchGraph.PI.push_back(faninNode);
-				currPatchGraph.PIMAP[faninNode->name] = faninNode;
-				currPatchGraph.PIFanoutNode.insert(it->first);
+				if (faninNode->name == "1'b0")
+					currPatchGraph.Constants[0]=faninNode;
+				else if(faninNode->name == "1'b1")
+					currPatchGraph.Constants[1] = faninNode;
+				else {
+					currPatchGraph.PI.push_back(faninNode);
+					currPatchGraph.PIMAP[faninNode->name] = faninNode;
+					currPatchGraph.PIFanoutNode.insert(it->first);
+				}
 			}
 		}
 		//find PO
@@ -2101,9 +2106,8 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 		if (it1->second->type != 9)
 			outfile << "_R2";
 	}
-	
-
 	outfile << endl;
+
 	//write -> ".outputs ..."
 	outfile << ".outputs";
 	for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
@@ -2111,6 +2115,7 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 	}
 	outfile << endl;
 
+	//output PI nodes
 	set<Node*>::iterator it = currPatchGraph.PIFanoutNode.begin();
 	for (; it != currPatchGraph.PIFanoutNode.end(); ++it) {
 		Node* fanoutNode = *it;
@@ -2120,11 +2125,21 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 		}
 	}
 
+	//output Constants
+	vector<bool> existConst(2, false);
+	for (int i = 0; i < currPatchGraph.Constants.size(); ++i) {
+		if (currPatchGraph.Constants[i] != NULL)
+			existConst[i] = true;
+	}
+	outputConst(outfile, existConst);
+
+	//output netlist
 	for (int i = 0; i < currPatchGraph.netlist.size(); ++i) {
 		Node* currNode = currPatchGraph.netlist[i];
 		if(!isVisitedPatch[currPatchGraph.netlist[i]])
 			outputDotNames(outfile, currNode, "R2");
 	}
+
 	outfile << ".end";
 }
 
