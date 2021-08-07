@@ -239,7 +239,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
    -------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
-	NewpatchVerify  ->  checkRemoveNodeFaninExist
+	patchVerify  ->  checkRemoveNodeFaninExist
 		.		 ->  faninIsPI
 		.		 ->  compareNetlist  ->  outputPatchDotNames
 						   .         ->  outputConst
