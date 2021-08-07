@@ -154,7 +154,7 @@ bool checkGateTypeEqual(Node* origin, Node* golden);
 
 
 //------ start create patch -------
-void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1);
+void patchVerify(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //check whether R2 and G1 are same after finishing  patch
 bool compareNetlist(MatchInfo& matchInfo, Graph& R2, Graph& G1);
 //out .names to BLIF File for patch
@@ -185,6 +185,8 @@ bool typeAndNumberCompare(const Node& p1, const Node& p2);
 // Sort by node name
 bool strTitleCompare(const string& p1, const string& p2);
 
+
+void patchOptimize(MatchInfo& matchInfo);
 
 void createRectifyPair(Graph& R2, Graph& G1);
 bool pisetIsDifferent(Node object, Node golden);
@@ -235,6 +237,15 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
 							  .	     ->  readSATsolverResult
 			.		  ->  removeAllFanin
    -------------------------------------------------------------------------------------
+	   |
+   -------------------------------------------------------------------------------------
+	patchVerify  ->  checkRemoveNodeFaninExist
+		.		 ->  faninIsPI
+		.		 ->  compareNetlist  ->  outputPatchDotNames
+						   .         ->  outputConst
+						   .         ->  buildMiter
+						   .         ->  SATsolver
+   ------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
 	generatePatchVerilog  ->  generateInstruction  ->  getTypeString
@@ -297,12 +308,15 @@ int main(int argc, char* argv[])
 	}
 	*/
 	//check seed and do SAT solver
-	//randomSimulation(matchInfo);
+	/*randomSimulation(matchInfo);*/
 
 	backStructureSearch(G1, R2, matchInfo);
 
 	//start create and verify patch
-	//createPatch(matchInfo, R2, G1);
+	//patchVerify(matchInfo, R2, G1);
+
+	//start optimize patch with abc tool
+	patchOptimize(matchInfo);
 
 	//output the patch.v
 	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
@@ -1388,7 +1402,7 @@ bool checkGateTypeEqual(Node* origin, Node* golden)
 	return true;
 }
 
-void createPatch(MatchInfo& matchInfo, Graph& R2, Graph& G1)
+void patchVerify(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 {
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
 	vector<Node*> patchNode;
@@ -1865,6 +1879,10 @@ void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, i
 	}
 }
 
+
+
+
+
 void outFile(Graph graph, char* argv)
 {
 	ofstream outfile(argv);
@@ -2025,5 +2043,21 @@ bool strTitleCompare(const string& p1, const string& p2)
 		return p1 < p2;
 	else
 		return p1.size() < p2.size();
+}
+
+
+void patchOptimize(MatchInfo& matchInfo)
+{
+	Graph currPatch;
+	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
+	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
+		for (int i = 0; i < it->first->fanin.size(); ++i) {
+			Node* faninNode = it->first->fanin[i];
+			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end())
+				currPatch.PI.push_back(faninNode);
+		}
+	}
+
+
 }
 
