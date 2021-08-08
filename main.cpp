@@ -191,6 +191,13 @@ bool strTitleCompare(const string& p1, const string& p2);
 void patchOptimize(MatchInfo& matchInfo);
 //out patch blif to optimize
 void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch);
+//read optimized patch blif file
+void readOptPatchBlif(Graph& currPatchGraph);
+//transfer blif command to graph
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, set<string>& checkExist);
+//return blif file gate type
+int selectBlifGateType(ifstream& infile);
+
 
 void createRectifyPair(Graph& R2, Graph& G1);
 bool pisetIsDifferent(Node object, Node golden);
@@ -311,7 +318,7 @@ int main(int argc, char* argv[])
 			cout << pos << endl;
 	}
 	*/
-	
+
 
 	//check seed and do SAT solver
 	/*randomSimulation(matchInfo);*/
@@ -1184,9 +1191,9 @@ void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 
 	outfile << ".names";
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
-		if (currNode->fanin[i]->graphName == currGraphName) {
+		if (currNode->fanin[i]->graphName == currGraphName || currGraphName == "patch") {
 			outfile << " " << currNode->fanin[i]->name;
-			if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name !="1'b0" && currNode->fanin[i]->name != "1'b1")
+			if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1")
 				outfile << "_" + currGraphName;
 		}
 	}
@@ -1332,7 +1339,7 @@ void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo)
 			goldenNode = goldenPoMap.find(it->first)->second;
 		if (goldenNode == nullptr || matchInfo.goldenRemoveNode.find(goldenNode) == matchInfo.goldenRemoveNode.end())
 			continue;
-		if(checkGateTypeEqual(originNode,goldenNode))
+		if (checkGateTypeEqual(originNode, goldenNode))
 			checkPOStructureEqual(originNode, goldenNode, matchInfo);
 	}
 
@@ -1349,7 +1356,7 @@ void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
 	for (int i = 0; i < origin->fanin.size(); i++) {
 		if (origin->fanin[i]->name == "1'b1" || origin->fanin[i]->name == "1'b0")
 			originFaninMap[origin->fanin[i]] = true;
-		else if (origin->fanin[i]->fanout.size() < 2 && matchInfo.originRemoveNode.find(origin->fanin[i])!=matchInfo.originRemoveNode.end())
+		else if (origin->fanin[i]->fanout.size() < 2 && matchInfo.originRemoveNode.find(origin->fanin[i]) != matchInfo.originRemoveNode.end())
 			originFaninMap[origin->fanin[i]] = true;
 	}
 
@@ -1359,7 +1366,7 @@ void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
 		else if (golden->fanin[i]->fanout.size() < 2 && matchInfo.goldenRemoveNode.find(golden->fanin[i]) != matchInfo.goldenRemoveNode.end())
 			goldenFaninMap[golden->fanin[i]] = true;
 	}
-		
+
 
 	for (map<Node*, bool>::iterator goldenptr = goldenFaninMap.begin(); goldenptr != goldenFaninMap.end(); ++goldenptr) {
 		Node* originNode = nullptr;
@@ -1402,7 +1409,7 @@ bool checkGateTypeEqual(Node* origin, Node* golden)
 	if (golden->name == "1'b1" || golden->name == "1'b0")
 		if (origin->name != golden->name)
 			return false;
-	if(origin->type!=golden->type || origin->realGate!=golden->realGate)
+	if (origin->type != golden->type || origin->realGate != golden->realGate)
 		return false;
 	return true;
 }
@@ -1794,7 +1801,7 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 		outfile << instructions[i] << "\n";
 	outfile << "endmodule\n";
 	//outfile << "// cost:" << cost;
-	cout << "// cost:" << cost<<"\n";
+	cout << "// cost:" << cost << "\n";
 	int i = 0;
 }
 
@@ -2066,8 +2073,8 @@ void patchOptimize(MatchInfo& matchInfo)
 			Node* faninNode = it->first->fanin[i];
 			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end()) {
 				if (faninNode->name == "1'b0")
-					currPatchGraph.Constants[0]=faninNode;
-				else if(faninNode->name == "1'b1")
+					currPatchGraph.Constants[0] = faninNode;
+				else if (faninNode->name == "1'b1")
 					currPatchGraph.Constants[1] = faninNode;
 				else {
 					currPatchGraph.PI.push_back(faninNode);
@@ -2077,7 +2084,7 @@ void patchOptimize(MatchInfo& matchInfo)
 			}
 		}
 		//find PO
-		if(it->first->fanout.size() == 0)
+		if (it->first->fanout.size() == 0)
 			currPatchGraph.PO.push_back(it->first);
 		else {
 			for (int i = 0; i < it->first->fanout.size(); ++i) {
@@ -2091,6 +2098,8 @@ void patchOptimize(MatchInfo& matchInfo)
 	}
 	//output blif
 	outputPatchBlif(currPatchGraph, isVisitedPatch);
+	//read optimized patch blif and transfer into goldenRemoveNode
+	readOptPatchBlif(currPatchGraph);
 }
 void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 {
@@ -2104,14 +2113,14 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 	for (; it1 != currPatchGraph.PIMAP.end(); ++it1) {
 		outfile << " " << it1->first;
 		if (it1->second->type != 9)
-			outfile << "_R2";
+			outfile << "_patch";
 	}
 	outfile << endl;
 
 	//write -> ".outputs ..."
 	outfile << ".outputs";
 	for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
-		outfile << " " << currPatchGraph.PO[i]->name<<"_R2";
+		outfile << " " << currPatchGraph.PO[i]->name << "_patch";
 	}
 	outfile << endl;
 
@@ -2120,7 +2129,7 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 	for (; it != currPatchGraph.PIFanoutNode.end(); ++it) {
 		Node* fanoutNode = *it;
 		if (!isVisitedPatch[fanoutNode]) {
-			outputDotNames(outfile, fanoutNode, "R2");
+			outputDotNames(outfile, fanoutNode, "patch");
 			isVisitedPatch[fanoutNode] = true;
 		}
 	}
@@ -2136,10 +2145,70 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 	//output netlist
 	for (int i = 0; i < currPatchGraph.netlist.size(); ++i) {
 		Node* currNode = currPatchGraph.netlist[i];
-		if(!isVisitedPatch[currPatchGraph.netlist[i]])
-			outputDotNames(outfile, currNode, "R2");
+		if (!isVisitedPatch[currPatchGraph.netlist[i]])
+			outputDotNames(outfile, currNode, "patch");
 	}
 
 	outfile << ".end";
+}
+void readOptPatchBlif(Graph& currPatchGraph)
+{
+	ifstream infile("opt_patch.blif");
+	string line;
+	map<Node*, bool> newGoldenRemoveNode;
+	set<string> checkExist;
+	int state = 0;// 0:comment 1:inputs 2:outputs 3:names
+	while (1) {
+		size_t _namesPos;
+		getline(infile, line);
+		if (line == ".end")
+			break;
+		if ((_namesPos = line.find(".names")) != string::npos || state) {
+			//remove .names in line
+			line = line.substr(_namesPos + 7, line.size() - 1);
+			//transfer blif into node
+			blif2Graph(infile, line, currPatchGraph, newGoldenRemoveNode, checkExist);
+			state = 1;
+		}
+	}
+}
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode , set<string>& checkExist)
+{
+	stringstream ss;
+	vector<Node*> NodeList;
+	ss << line;
+	int pos = 0; //0: .names 1:first node 2:second node 3:third node ...
+	while (1) {
+		string new_line;
+		size_t _patchPos = 0;
+		getline(ss, new_line, ' ');
+		pos++;
+		if (new_line.size() == 0)
+			break;
+		if ((_patchPos = new_line.find("_patch")) != string::npos)
+			new_line = new_line.substr(0, _patchPos);
+
+		if ((currPatchGraph.PIMAP.find(new_line) != currPatchGraph.PIMAP.end()) || (checkExist.find(new_line) != checkExist.end())) {
+			NodeList.push_back(currPatchGraph.PIMAP[new_line]);
+			continue;
+		}
+		//select blif file gate type by 11 1 or 00 0 ... 
+		int GataType = selectBlifGateType(infile);
+		//create new node and push into NodeList
+		Node* newNode = initialNewnode(new_line, GataType, "patch");
+		NodeList.push_back(newNode);
+		//push into new GoldenRemoveNode
+		newGoldenRemoveNode[newNode] = false;
+		//check if this node exist
+		checkExist.insert(new_line);
+	}
+}
+int selectBlifGateType(ifstream& infile)
+{
+	string gateTypeLine;
+	getline(infile, gateTypeLine);
+	if (gateTypeLine == "11 1") return 1;
+	else if (gateTypeLine == "00 0") return 2;
+	return 3;
 }
 
