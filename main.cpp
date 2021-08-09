@@ -80,7 +80,7 @@ void PiPoRecord(string str, Graph& graph);
 // Initialize new node
 Node* initialNewnode(string name, int type, string graphName);
 // Select gate type
-int selectGateType(string gate);
+int selectGateType(string gate); 
 
 
 //run topological sort
@@ -194,7 +194,7 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch);
 //read optimized patch blif file
 void readOptPatchBlif(Graph& currPatchGraph);
 //transfer blif command to graph
-void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, set<string>& checkExist);
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<string, Node*>& checkExist);
 //return blif file gate type
 int selectBlifGateType(ifstream& infile);
 
@@ -2156,7 +2156,7 @@ void readOptPatchBlif(Graph& currPatchGraph)
 	ifstream infile("opt_patch.blif");
 	string line;
 	map<Node*, bool> newGoldenRemoveNode;
-	set<string> checkExist;
+	map<string,Node*> checkExist;
 	int state = 0;// 0:comment 1:inputs 2:outputs 3:names
 	while (1) {
 		size_t _namesPos;
@@ -2172,24 +2172,26 @@ void readOptPatchBlif(Graph& currPatchGraph)
 		}
 	}
 }
-void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode , set<string>& checkExist)
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode , map<string,Node*>& checkExist)
 {
 	stringstream ss;
 	vector<Node*> NodeList;
 	ss << line;
-	int pos = 0; //0: .names 1:first node 2:second node 3:third node ...
 	while (1) {
 		string new_line;
 		size_t _patchPos = 0;
 		getline(ss, new_line, ' ');
-		pos++;
 		if (new_line.size() == 0)
 			break;
 		if ((_patchPos = new_line.find("_patch")) != string::npos)
 			new_line = new_line.substr(0, _patchPos);
 
-		if ((currPatchGraph.PIMAP.find(new_line) != currPatchGraph.PIMAP.end()) || (checkExist.find(new_line) != checkExist.end())) {
+		if (currPatchGraph.PIMAP.find(new_line) != currPatchGraph.PIMAP.end() ) {
 			NodeList.push_back(currPatchGraph.PIMAP[new_line]);
+			continue;
+		}
+		else if (checkExist.find(new_line) != checkExist.end()) {
+			NodeList.push_back(checkExist[new_line]);
 			continue;
 		}
 		//select blif file gate type by 11 1 or 00 0 ... 
@@ -2200,15 +2202,30 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 		//push into new GoldenRemoveNode
 		newGoldenRemoveNode[newNode] = false;
 		//check if this node exist
-		checkExist.insert(new_line);
+		checkExist[new_line] = newNode;
+	}
+	//start push fanin node and fanout node
+	Node* fanoutNode = NodeList[NodeList.size() - 1];
+	for (int i = 0; i < NodeList.size() - 1; ++i) {
+		//currGate fanin Node
+		Node* faninNode = NodeList[i];
+		//push into fanin and fanout
+		faninNode->fanout.push_back(fanoutNode);
+		fanoutNode->fanin.push_back(faninNode);
 	}
 }
 int selectBlifGateType(ifstream& infile)
 {
 	string gateTypeLine;
 	getline(infile, gateTypeLine);
-	if (gateTypeLine == "11 1") return 1;
-	else if (gateTypeLine == "00 0") return 2;
-	return 3;
+	if (gateTypeLine == "0 1") return 0;// not
+	else if (gateTypeLine == "11 1") return 1; // and 
+	else if (gateTypeLine == "00 0") return 2;// or
+	else if (gateTypeLine == "11 0") return 3;// nand
+	else if (gateTypeLine == "00 1") return 4;// nor
+	else if (gateTypeLine == " 0" || gateTypeLine == " 1") return 8;// assgin
+
+	//not yet decide node
+	return -1;
 }
 
