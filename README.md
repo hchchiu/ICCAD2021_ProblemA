@@ -59,6 +59,12 @@
 	- [修改]  `generatePatchVerilog`，因wire有bus導致名稱異常問題(ex: y[3]3)
 	- [修改]  `verilog2graph`，因fanin大於2且輸出為PO，新增Node時造成讀取type而不是realGate
 	- [修改]  `verify.cpp`，修復當遇到Constant Node時，輸出指令的問題。
+- 2021/08/09 13:55
+	- [新增]  `patchOptimize`，將patch丟入abc透過Rsyn2簡化電路
+	- [新增]  `outputPatchBlif`，將patch轉成BLIF並輸出
+	- [新增]  `readOptPatchBlif`，讀取優化後patch的BLIF檔案
+	- [新增]  `blif2Graph`，將BLIF轉成`struct Node`
+	- [新增]  `selectBlifGateType`，將BLIF中的輸入(ex:00 1,11 1)轉換成primitve gate
 
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
