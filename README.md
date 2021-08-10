@@ -98,4 +98,4 @@ $ make install
 $ export  LD_LIBRARY_PATH=$HOME/cada0047_beta/minisat-master/lib/
 $ g++ --std=c++0x main.cpp -o cada0047_beta
 ```
-
+Test
