@@ -92,7 +92,7 @@ $ make config prefix=$PREFIX(/home/usr/minisat)
 $ make install
 ```
 
-
+test123
 ## How to Compile
 ```bash
 $ export  LD_LIBRARY_PATH=$HOME/cada0047_beta/minisat-master/lib/
