@@ -17,6 +17,7 @@ using namespace std;
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
+// test
 // if one node's fanin have two same nodes could have error...
 struct Node
 {
