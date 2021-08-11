@@ -17,7 +17,6 @@ using namespace std;
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
-// test
 // if one node's fanin have two same nodes could have error...
 struct Node
 {
@@ -144,13 +143,11 @@ bool readSATsolverResult();
 void abcBlif2CNF();
 
 
-//PO to PI search
-void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo);
-//
+// From PO to PI Comapre
 void backStructureComapre(Graph origin, Graph golden, MatchInfo& matchInfo);
-//
-void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo);
-//
+// Check PO to PI all path gate type equal 
+void backCheckStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo);
+// Check gate type equal
 bool checkGateTypeEqual(Node* origin, Node* golden);
 
 
@@ -175,13 +172,13 @@ void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, i
 // patch format
 string generatePatchFormat(Node* node);
 // is constant
-void isConstantCondition(string& name, map<string, bool>& useConstant, Node* node,int & totalCost);
+void isConstantCondition(string& name, map<string, bool>& useConstant, Node* node, int& totalCost);
 // is in match
-void isInMatchCondition(string& name,map<Node*, Node*> matches, Node* node, map<Node*, string>& inputDeclareMap);
-//
+void isInMatchCondition(string& name, map<Node*, Node*> matches, Node* node, map<Node*, string>& inputDeclareMap);
+// is in goldenremoveNode
 void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* node);
-//
-void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string> newGateMap);
+// is randomsimulation remove from goldenremovenode and need to declare this leaking gate
+void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string>& newGateMap);
 
 
 
@@ -1042,6 +1039,10 @@ void randomSimulation(MatchInfo& matchInfo)
 					}
 				}
 			}
+			/*else if (og_it->first->type == 10 && gd_it->first->type == 10) {
+				if (og_it->first->name == gd_it->first->name)
+					cout << og_it->first->name << endl;
+			}*/
 		}
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
@@ -1345,28 +1346,28 @@ void backStructureComapre(Graph origin, Graph golden, MatchInfo& matchInfo)
 
 	for (map<string, Node*>::iterator it = originPoMap.begin(); it != originPoMap.end(); ++it) {
 		Node* originNode = it->second;
-		Node* goldenNode = nullptr;
+		Node* goldenNode = 0;
 		if (matchInfo.originRemoveNode.find(originNode) == matchInfo.originRemoveNode.end())
 			continue;
 		if (goldenPoMap.find(it->first) != goldenPoMap.end())
 			goldenNode = goldenPoMap.find(it->first)->second;
 		if (matchInfo.originRemoveNode.find(originNode) == matchInfo.originRemoveNode.end())
 			continue;
-		if (goldenNode == nullptr || matchInfo.goldenRemoveNode.find(goldenNode) == matchInfo.goldenRemoveNode.end())
+		if (goldenNode == 0 || matchInfo.goldenRemoveNode.find(goldenNode) == matchInfo.goldenRemoveNode.end())
 			continue;
 		if (originNode->fanout.size() != 0 || goldenNode->fanout.size() != 0)
 			continue;
 		if (getTypeString(originNode->realGate) == "assign" || getTypeString(goldenNode->realGate) == "assign")
 			continue;
 		if (checkGateTypeEqual(originNode, goldenNode))
-			checkPOStructureEqual(originNode, goldenNode, matchInfo);
+			backCheckStructureEqual(originNode, goldenNode, matchInfo);
 	}
 
 	int k = 0;
 }
 
 
-void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
+void backCheckStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
 {
 	map<Node*, bool> originFaninMap;
 	map<Node*, bool> goldenFaninMap;
@@ -1394,7 +1395,7 @@ void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
 
 	// check fanin match
 	for (map<Node*, bool>::iterator goldenptr = goldenFaninMap.begin(); goldenptr != goldenFaninMap.end(); ++goldenptr) {
-		Node* originNode = nullptr;
+		Node* originNode = 0;
 		Node* goldenNode = goldenptr->first;
 		for (map<Node*, bool>::iterator originptr = originFaninMap.begin(); originptr != originFaninMap.end(); ++originptr) {
 			originNode = originptr->first;
@@ -1416,7 +1417,7 @@ void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
 				continue;
 			if (goldenNode->name == "1'b1" || goldenNode->name == "1'b0")
 				continue;
-			checkPOStructureEqual(originNode, goldenNode, matchInfo);
+			backCheckStructureEqual(originNode, goldenNode, matchInfo);
 		}
 	}
 	else
@@ -1439,7 +1440,7 @@ bool checkGateTypeEqual(Node* origin, Node* golden)
 			return false;
 	if (origin->type != golden->type || origin->realGate != golden->realGate)
 		return false;
-	if (origin->realGate ==8 || golden->realGate == 8)
+	if (origin->realGate == 8 || golden->realGate == 8)
 		return false;
 	return true;
 }
@@ -1708,7 +1709,7 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
 			else
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
-			
+
 			if (names[i] == "") { //have error
 				cout << "PO to PI generate patch Error!\n";
 			}
@@ -1805,14 +1806,18 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 			outfile << ", " << it->second;
 		else
 			outfile << "," << it->second;
-		
+
 	}
 	outfile << ");\n";
 	//cout << "after output\n";
 	// input.... output....  wire....
+	cout << totalCost << "\n";
 	generateDeclare(inputDeclareMap, "input", outfile, totalCost);
+	cout << totalCost << "\n";
 	generateDeclare(outputDeclareMap, "output", outfile, totalCost);
+	cout << totalCost << "\n";
 	generateDeclare(newGateMap, "wire", outfile, totalCost);
+	cout << totalCost << "\n";
 
 	// and or not....
 	for (int i = 0; i < instructionSet.size(); i++)
@@ -1916,7 +1921,7 @@ string generatePatchFormat(Node* node)
 	string name = node->name;
 	if (name == "1'b1" || name == "1'b0")
 		return name;
-	else if (node->graphName == "G1") { 
+	else if (node->graphName == "G1") {
 		if (name.find("[") != string::npos)
 			name = "\\" + name + " ";
 	}
@@ -1925,7 +1930,7 @@ string generatePatchFormat(Node* node)
 			if (name.find("[") != string::npos)
 				name = "\\" + name + " ";
 		}
-		else { 
+		else {
 			if (name.find("[") != string::npos) {  // in R2 represent it need to be add new gate
 				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
 				name = name.substr(0, name.find("[")) + req;
@@ -1934,7 +1939,7 @@ string generatePatchFormat(Node* node)
 			else
 				name = "patchNew_" + name;
 		}
-		
+
 	}
 	return name;
 }
@@ -1962,7 +1967,7 @@ void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* no
 		newGateMap[node] = name;
 }
 
-void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string> newGateMap)
+void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string> &newGateMap)
 {
 	name = generatePatchFormat(node);
 	if (newGateMap.find(node) == newGateMap.end()) {

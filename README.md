@@ -65,6 +65,16 @@
 	- [新增]  `readOptPatchBlif`，讀取優化後patch的BLIF檔案
 	- [新增]  `blif2Graph`，將BLIF轉成`struct Node`
 	- [新增]  `selectBlifGateType`，將BLIF中的輸入(ex:00 1,11 1)轉換成primitve gate
+- 2021/08/11 15:30
+	- [新增]  `backStructureComapre`，從PO往前找Gate type一樣的Path
+	- [新增]  `backCheckStructureEqual`，功能為一直往前找Fanin's Gate的Gate都相同且的Fanout為1的Path
+	- [新增]  `checkGateTypeEqual`，Check Gate type Equal
+	- [修改]  `generatePatchVerilog`，完整修改輸出方式
+	- [新增]  `generatePatchFormat`，`y[3]` to `\y[3] ` if `y[3]` is PI/PO
+	- [新增]  `isConstantCondition`，如果fanin是常數的流程
+	- [新增]  `isInMatchCondition`，如果fanin是在`match`的流程
+	- [新增]  `isInGoldenRemoveNode`，如果fanin是在`GoldenRemoveNode`的流程
+	- [新增]  `isLeakingNode`，如果fanin是在找不到時`Leaking`的流程
 
 ## To Do List
 - [X] 利用Graph的Netlist做Structure Compare
@@ -72,7 +82,7 @@
 - [X] 利用SAT做Compare
 - [X]  產生patch
 - [X] 解決 Random Simulation會造成Gate不見的問題(如:Meeting 06/21 pg.2)
-
+- [] if one node's fanin have two same nodes could have error...
 
 
 ## abc
