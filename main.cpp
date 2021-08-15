@@ -352,6 +352,7 @@ int main(int argc, char* argv[])
 		if (it->first->name == "n_264")
 			cout << "264---\n";
 	}*/
+
 	randomSimulation(matchInfo);
 	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
 		if (it->first->name == "n_505")
@@ -360,6 +361,7 @@ int main(int argc, char* argv[])
 			cout << "264***\n";
 	}*/
 	//cout << "after random\n";
+
 	backStructureComapre(G1, R2, matchInfo);
 	//cout << "after back\n";
 	//start create and verify patch
@@ -369,7 +371,7 @@ int main(int argc, char* argv[])
 	//patchOptimize(matchInfo);
 
 	//output the patch.v
-	//generatePatchVerilog(matchInfo, R2, G1, argv[4]);
+	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -1047,9 +1049,10 @@ void randomSimulation(MatchInfo& matchInfo)
 {
 	map<Node*, bool>::iterator gd_it = matchInfo.goldenRemoveNode.begin();
 	map<Node*, bool>::iterator og_it = matchInfo.originRemoveNode.begin();
-
-	for (; og_it != matchInfo.originRemoveNode.end(); ++og_it) {
+	bool findSameNode = false;
+	for (; og_it != matchInfo.originRemoveNode.end();) {
 		gd_it = matchInfo.goldenRemoveNode.begin();
+		findSameNode = false;
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
@@ -1062,16 +1065,16 @@ void randomSimulation(MatchInfo& matchInfo)
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeAllFanin(matchInfo, og_it->first, gd_it->first);
 							og_it = matchInfo.originRemoveNode.begin();
+							findSameNode = true;
 							break;
 						}
 					}
 				}
 			}
-			/*else if (og_it->first->type == 10 && gd_it->first->type == 10) {
-				if (og_it->first->name == gd_it->first->name)
-					cout << og_it->first->name << endl;
-			}*/
 		}
+		//if not find the same node
+		if (!findSameNode)
+			++og_it;
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
 	}
@@ -2172,16 +2175,42 @@ void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<
 
 void patchOptimize(MatchInfo& matchInfo)
 {
-	Graph currPatch;
+	Graph currPatchGraph;
+	map<Node*, bool> isVisitedPatch;
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
+	currPatchGraph.Constants.resize(2);
 	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
+		//push all golden remove node to currPatchGraph and isVisitedPatch
+		currPatchGraph.netlist.push_back(it->first);
+		isVisitedPatch[it->first] = false;
+		//find PI
 		for (int i = 0; i < it->first->fanin.size(); ++i) {
 			Node* faninNode = it->first->fanin[i];
-			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end())
-				currPatch.PI.push_back(faninNode);
+			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end()) {
+				if (faninNode->name == "1'b0")
+					currPatchGraph.Constants[0] = faninNode;
+				else if (faninNode->name == "1'b1")
+					currPatchGraph.Constants[1] = faninNode;
+				else {
+					currPatchGraph.PI.push_back(faninNode);
+					currPatchGraph.PIMAP[faninNode->name] = faninNode;
+					currPatchGraph.PIFanoutNode.insert(it->first);
+				}
+			}
+		}
+		//find PO
+		if (it->first->fanout.size() == 0)
+			currPatchGraph.PO.push_back(it->first);
+		else {
+			for (int i = 0; i < it->first->fanout.size(); ++i) {
+				Node* fanoutNode = it->first->fanout[i];
+				if (matchInfo.goldenRemoveNode.find(fanoutNode) == matchInfo.goldenRemoveNode.end()) {
+					currPatchGraph.PO.push_back(it->first);
+					break;
+				}
+			}
 		}
 	}
-
 	//output blif
 	outputPatchBlif(currPatchGraph, isVisitedPatch);
 
