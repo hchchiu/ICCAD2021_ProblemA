@@ -200,9 +200,9 @@ int selectBlifGateType(ifstream& infile);
 //solve the proble of blif file (ex:10 1,01 1)
 Node* connectNewNotGate(Node* faninNode, string& notGateName, int& notGatePos, map<Node*, bool>& newGoldenRemoveNode);
 //find two fanin node
-int faninNodeisLegal(Node* currNode);
+bool faninNodeisLegal(Node* currNode, map<Node*, bool>& newGoldenRemoveNode);
 //combine into XRO gate or XNOR gate
-void combine2XORorXNOR(map<Node*, bool>& newGoldenRemoveNode);
+void removeRedundantNode(map<Node*, bool>& newGoldenRemoveNode);
 
 void createRectifyPair(Graph& R2, Graph& G1);
 bool pisetIsDifferent(Node object, Node golden);
@@ -2106,7 +2106,7 @@ void patchOptimize(MatchInfo& matchInfo)
 	readOptPatchBlif(currPatchGraph, newGoldenRemoveNode);
 
 	//combine split gate into xor or xnor gate
-	combine2XORorXNOR(newGoldenRemoveNode);
+	removeRedundantNode(newGoldenRemoveNode);
 
 }
 
@@ -2309,51 +2309,85 @@ Node* connectNewNotGate(Node* faninNode, string& notGateName, int& notGatePos, m
 	return notGate;
 }
 
-void combine2XORorXNOR(map<Node*,bool>& newGoldenRemoveNode)
+void removeRedundantNode(map<Node*,bool>& newGoldenRemoveNode)
 {
 	map<Node*, bool>::iterator it = newGoldenRemoveNode.begin();
+	int gatePos = 0;
 	for (; it != newGoldenRemoveNode.end(); ++it) {
 		Node* currNode = it->first;
 		//if this node is OR or NOR gate
 		if (currNode->type == 2 || currNode->realGate == 2 || 
 			currNode->type == 4 || currNode->realGate == 4) {
-			if (faninNodeisLegal(currNode) != 0) {
-				cout << "succ!";
-			}
+			faninNodeisLegal(currNode,newGoldenRemoveNode);
 		}
 	}
 }
-int faninNodeisLegal(Node* currNode)
+bool faninNodeisLegal(Node* currNode, map<Node*, bool>& newGoldenRemoveNode,int& gatePos)
 {
 	//return 0:not the xor gate 5:xor 6:xnor
 
-	set<string> faninName;
+	//check fanin are same by its name
+	set<Node*> redundantFaninNode;
+	//record redundant name
+	set<Node*> redundantNode;
+
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		Node* faninNode= currNode->fanin[i];
 		int notGateNumber = 0;
 		//check node type is and gate
-		if (faninNode->type != 1)
+		if (faninNode->type != 1 || faninNode->fanout.size() != 1)
 			return 0;
+
+		//insert into redundant node
+		redundantNode.insert(faninNode);
+
 		//check not gate number 
 		for (int j = 0; j < faninNode->fanin.size(); ++j) {
+			//if this gate is NOT gate
 			if (faninNode->fanin[j]->type == 0) {
-				faninName.insert(faninNode->fanin[j]->fanin[0]->name);
+				//fanout must be 1
+				if (faninNode->fanin[j]->fanout.size() != 1)
+					return 0;
+
+				redundantFaninNode.insert(faninNode->fanin[j]->fanin[0]);
+				redundantNode.insert(faninNode->fanin[j]->fanin[0]);
+				//number of not gate
 				notGateNumber++;
 				continue;
 			}
-			faninName.insert(faninNode->fanin[j]->name);
+			redundantFaninNode.insert(faninNode->fanin[j]);
+			redundantNode.insert(faninNode->fanin[j]);
 		}
 		if (notGateNumber != 1)
 			return 0;
 	}
-	if (faninName.size() != 2)
+	if (redundantFaninNode.size() != 2)
 		return 0;
 
 	if (currNode->type == 2 || currNode->realGate == 2)
-		return 5;
+		startRebuildNode(currNode, redundantFaninNode, redundantNode, newGoldenRemoveNode, 5,gatePos);
 	else if (currNode->type == 4 || currNode->realGate == 4)
-		return 6;
+		startRebuildNode(currNode, redundantFaninNode, redundantNode, newGoldenRemoveNode, 6, gatePos);
 
+	return true;
+}
+void startRebuildNode(Node* fanoutNode, set<Node*>& redundantFaninNode, set<Node*>& redundantNode, 
+					 map<Node*, bool>& newGoldenRemoveNode,int type, int& gatePos)
+{
+	string gateName = "_xor_GATE_";
+	if(type == 6)
+		gateName = "_xnor_GATE_";
+
+	Node* newNode = initialNewnode(gateName+toString(gatePos++),type,"patch");
+}
+void removeRedundantFaninFanout(Node* redundantNode, Node* newNode)
+{
+	for (int i = 0; i < redundantNode->fanout.size(); ++i) {
+		Node* fanoutNode= redundantNode->fanout[i];
+		for (int j = 0; j < fanoutNode->fanin.size(); ++j) {
+
+		}
+	}
 }
 
 int selectBlifGateType(ifstream& infile)
