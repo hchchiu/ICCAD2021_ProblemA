@@ -1,4 +1,4 @@
-﻿#include<iostream>
+#include<iostream>
 #include<fstream>
 #include<sstream>
 #include<time.h>
@@ -198,8 +198,36 @@ void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<
 
 void patchOptimize(MatchInfo& matchInfo);
 
+
 //void createRectifyPair(Graph& R2, Graph& G1);
 //bool pisetIsDifferent(Node object, Node golden);
+
+//out patch blif to optimize
+void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch);
+//read optimized patch blif file
+void readOptPatchBlif(Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode);
+//transfer blif command to graph
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<string, Node*>& checkExist, int& notGatePos);
+//return blif file gate type
+int selectBlifGateType(ifstream& infile);
+//solve the proble of blif file (ex:10 1,01 1)
+Node* connectNewNotGate(Node* faninNode, string& notGateName, int& notGatePos, map<Node*, bool>& newGoldenRemoveNode);
+//find two fanin node
+bool faninNodeisLegal(Node* currNode, map<Node*, bool>& newGoldenRemoveNode, int& gatePos);
+//combine into XRO gate or XNOR gate
+void removeRedundantNode(map<Node*, bool>& newGoldenRemoveNode);
+//start rebuild new node
+void startRebuildNode(Node* fanoutNode, set<Node*>& redundantFaninNode, set<Node*>& redundantNode,
+	map<Node*, bool>& newGoldenRemoveNode, int type, int& gatePos);
+//remove fanout node's redundant fanin
+void removeRedundantFanin(Node* redundantNode, Node* newNode);
+//remove fanin node's redundant fanout
+void removeRedundantFanout(Node* faninNode, set<Node*>& redundantNode);
+//solve the problem of old node in the fanin node's fanout
+void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<Node*, bool>& oldGoldenRemoveNode);
+
+
+
 bool seedIsDifferent(Node* origin, Node* golden);
 
 //tool function
@@ -341,7 +369,7 @@ int main(int argc, char* argv[])
 	//patchOptimize(matchInfo);
 
 	//output the patch.v
-	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
+	//generatePatchVerilog(matchInfo, R2, G1, argv[4]);
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -1916,6 +1944,7 @@ void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, i
 	}
 }
 
+
 string generatePatchFormat(Node* node)
 {
 	string name = node->name;
@@ -1974,10 +2003,8 @@ void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<
 		leakingNodeVec.push_back(node);
 		newGateMap[node] = name;
 	}
+
 }
-
-
-
 
 
 //void outFile(Graph graph, char* argv)
@@ -2155,6 +2182,346 @@ void patchOptimize(MatchInfo& matchInfo)
 		}
 	}
 
+	//output blif
+	outputPatchBlif(currPatchGraph, isVisitedPatch);
+
+	//read optimized patch blif and transfer into goldenRemoveNode
+	map<Node*, bool> newGoldenRemoveNode;
+	readOptPatchBlif(currPatchGraph, newGoldenRemoveNode);
+
+	//combine split gate into xor or xnor gate
+	removeRedundantNode(newGoldenRemoveNode);
+
+	//remove old R2 node
+	removeOldNode(currPatchGraph, newGoldenRemoveNode, matchInfo.goldenRemoveNode);
+
+	matchInfo.goldenRemoveNode = newGoldenRemoveNode;
+}
+
+void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
+{
+	ofstream outfile("./blif/check.blif");
+	//write -> ".model check"
+	outfile << ".model check" << endl;
+	outfile << ".end";
+}
+
+void readOptPatchBlif(Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode)
+{
+	ifstream infile("opt_patch.blif");
+	string line;
+	map<string, Node*> checkExist;
+	int notGatePos = 0;
+	int state = 0;// 0:comment 1:inputs 2:outputs 3:names
+	while (1) {
+		size_t _namesPos;
+		getline(infile, line);
+		if (line == ".end")
+			break;
+		if ((_namesPos = line.find(".names")) != string::npos || state) {
+			//remove .names in line
+			line = line.substr(_namesPos + 7, line.size() - 1);
+			//transfer blif into node
+			blif2Graph(infile, line, currPatchGraph, newGoldenRemoveNode, checkExist, notGatePos);
+			state = 1;
+		}
+	}
+	infile.close();
+}
+
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode,
+	map<string, Node*>& checkExist, int& notGatePos)
+{
+	stringstream ss;
+	vector<Node*> NodeList;
+	vector<string> NodeListString;
+
+	//record whether this node is fanin or fanout node
+	ss << line;
+	//split blif file command and save into vector
+	while (1) {
+		string new_line;
+		size_t _patchPos = 0;
+		getline(ss, new_line, ' ');
+		if (new_line.size() == 0)
+			break;
+		if ((_patchPos = new_line.find("_patch")) != string::npos)
+			new_line = new_line.substr(0, _patchPos);
+
+		NodeListString.push_back(new_line);
+	}
+
+	for (int gatePos = 0; gatePos < NodeListString.size(); ++gatePos) {
+		//node name
+		string new_line = NodeListString[gatePos];
+
+		if (currPatchGraph.PIMAP.find(new_line) != currPatchGraph.PIMAP.end()) {
+			NodeList.push_back(currPatchGraph.PIMAP[new_line]);
+			continue;
+		}
+		else if (checkExist.find(new_line) != checkExist.end()) {
+			if (checkExist[new_line]->type == -1 && gatePos == NodeListString.size() - 1)
+				checkExist[new_line]->type = selectBlifGateType(infile);
+			NodeList.push_back(checkExist[new_line]);
+			continue;
+		}
+		else {
+			int exist = false;
+			for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
+				if (currPatchGraph.PO[i]->name == new_line && gatePos == NodeListString.size() - 1) {
+					exist = true;
+					//get the new type
+					currPatchGraph.PO[i]->realGate = selectBlifGateType(infile);
+					//push into new GoldenRemoveNode
+					newGoldenRemoveNode[currPatchGraph.PO[i]] = false;
+					NodeList.push_back(currPatchGraph.PO[i]);
+					break;
+				}
+			}
+			//this node is PO
+			if (exist)
+				continue;
+		}
+
+		//select blif file gate type by 11 1 or 00 0 ... 
+		int GataType;
+		//check if this node is fanout node 
+		//if this node is fanin node give this node gate type -1
+		if (gatePos == NodeListString.size() - 1)
+			GataType = selectBlifGateType(infile);
+		else
+			GataType = -1;
+		//create new node and push into NodeList
+		Node* newNode = initialNewnode(new_line, GataType, "patch");
+		NodeList.push_back(newNode);
+		//push into new GoldenRemoveNode
+		newGoldenRemoveNode[newNode] = false;
+		//check if this node exist
+		checkExist[new_line] = newNode;
+	}
+	//start push fanin node and fanout node
+	Node* fanoutNode = NodeList[NodeList.size() - 1];
+	//not gate name for 10 1 or 01 1 situation
+	string notGateName = "_not_GATE_";
+	for (int i = 0; i < NodeList.size() - 1; ++i) {
+		//currGate fanin Node
+		Node* faninNode = NodeList[i];
+
+		//fix the problem of blif file case(ex:10 1,01 1,10 0,01 0)
+		if ((fanoutNode->type == 210 || fanoutNode->type == 101) && i == 0) //10 1
+			faninNode = connectNewNotGate(faninNode, notGateName, notGatePos, newGoldenRemoveNode);
+		else if ((fanoutNode->type == 201 || fanoutNode->type == 110) && i == 1)//01 1
+			faninNode = connectNewNotGate(faninNode, notGateName, notGatePos, newGoldenRemoveNode);
+
+		//push into fanin and fanout
+		faninNode->fanout.push_back(fanoutNode);
+		fanoutNode->fanin.push_back(faninNode);
+	}
+	//transfer special gate type into primitive gate type
+	if (fanoutNode->type == 101 || fanoutNode->type == 110)//and gate 
+		fanoutNode->type = 1;
+	else if (fanoutNode->type == 201 || fanoutNode->type == 210)//or gate
+		fanoutNode->type = 2;
+	else if (fanoutNode->type == 80 || fanoutNode->type == 81 ||
+		fanoutNode->realGate == 80 || fanoutNode->realGate == 81) { //assign constant 0 or 1
+		Node* newConstNode;
+		if (fanoutNode->type == 80)
+			newConstNode = initialNewnode("1'b0", -1, "patch");
+		else
+			newConstNode = initialNewnode("1'b1", -1, "patch");
+
+		if (fanoutNode->type == 10)
+			fanoutNode->realGate = 8;
+		else
+			fanoutNode->type = 8;
+
+		newConstNode->fanout.push_back(fanoutNode);
+		fanoutNode->fanin.push_back(newConstNode);
+	}
+
+}
+Node* connectNewNotGate(Node* faninNode, string& notGateName, int& notGatePos, map<Node*, bool>& newGoldenRemoveNode)
+{
+	//new a not gate
+	Node* notGate = initialNewnode(notGateName + toString(notGatePos++), 0, "patch");
+	//not gate fanin is currNode
+	notGate->fanin.push_back(faninNode);
+	//currNode fanin is not gate
+	faninNode->fanout.push_back(notGate);
+	//push not gate into newGoldenRemoveNode
+	newGoldenRemoveNode[notGate] = false;
+
+	return notGate;
+}
+
+void removeRedundantNode(map<Node*, bool>& newGoldenRemoveNode)
+{
+	map<Node*, bool>::iterator it = newGoldenRemoveNode.begin();
+	int gatePos = 0;
+	bool addNewGate = false;
+	for (; it != newGoldenRemoveNode.end();) {
+		addNewGate = false;
+		Node* currNode = it->first;
+		//if this node is OR or NOR gate
+		if (currNode->type == 2 || currNode->realGate == 2 ||
+			currNode->type == 4 || currNode->realGate == 4) {
+			if (faninNodeisLegal(currNode, newGoldenRemoveNode, gatePos)) {
+				it = newGoldenRemoveNode.begin();
+				addNewGate = true;
+			}
+		}
+		if (addNewGate == false)
+			++it;
+	}
+}
+bool faninNodeisLegal(Node* currNode, map<Node*, bool>& newGoldenRemoveNode, int& gatePos)
+{
+	//return 0:not the xor gate 5:xor 6:xnor
+
+	//check fanin are same by its name
+	set<Node*> redundantFaninNode;
+	//record redundant name
+	set<Node*> redundantNode;
+
+	for (int i = 0; i < currNode->fanin.size(); ++i) {
+		Node* faninNode = currNode->fanin[i];
+		int notGateNumber = 0;
+		//check node type is and gate
+		if (faninNode->type != 1 || faninNode->fanout.size() != 1)
+			return 0;
+
+		//insert into redundant node
+		redundantNode.insert(faninNode);
+
+		//check not gate number 
+		for (int j = 0; j < faninNode->fanin.size(); ++j) {
+			//if this gate is NOT gate
+			if (faninNode->fanin[j]->type == 0) {
+				//fanout must be 1
+				if (faninNode->fanin[j]->fanout.size() != 1)
+					return 0;
+
+				redundantFaninNode.insert(faninNode->fanin[j]->fanin[0]);
+				redundantNode.insert(faninNode->fanin[j]->fanin[0]);
+				//number of not gate
+				notGateNumber++;
+				continue;
+			}
+			redundantFaninNode.insert(faninNode->fanin[j]);
+			redundantNode.insert(faninNode->fanin[j]);
+		}
+		if (notGateNumber != 1)
+			return 0;
+	}
+	if (redundantFaninNode.size() != 2)
+		return 0;
+
+	if (currNode->type == 2 || currNode->realGate == 2)
+		startRebuildNode(currNode, redundantFaninNode, redundantNode, newGoldenRemoveNode, 5, gatePos);
+	else if (currNode->type == 4 || currNode->realGate == 4)
+		startRebuildNode(currNode, redundantFaninNode, redundantNode, newGoldenRemoveNode, 6, gatePos);
+
+	return true;
+}
+void startRebuildNode(Node* fanoutNode, set<Node*>& redundantFaninNode, set<Node*>& redundantNode,
+	map<Node*, bool>& newGoldenRemoveNode, int type, int& gatePos)
+{
+	string gateName = "_xor_GATE_";
+	if (type == 6)
+		gateName = "_xnor_GATE_";
+
+	Node* newNode = initialNewnode(gateName + toString(gatePos++), type, "patch");
+	removeRedundantFanin(fanoutNode, newNode);
+	set<Node*>::iterator it = redundantFaninNode.begin();
+	for (; it != redundantFaninNode.end(); ++it) {
+		newNode->fanin.push_back(*it);
+		(*it)->fanout.push_back(newNode);
+		removeRedundantFanout(*it, redundantNode);
+	}
+	// erase redundant node in newGoldenRemoveNode 
+	it = redundantNode.begin();
+	for (; it != redundantNode.end(); ++it)
+		if (newGoldenRemoveNode.find(*it) != newGoldenRemoveNode.end())
+			newGoldenRemoveNode.erase(*it);
+	//erase fanout node(OR gate or AND gate)
+	newGoldenRemoveNode.erase(fanoutNode);
+	//add new XOR or XNOR gate into newGoldenRemoveNode
+	newGoldenRemoveNode[newNode] = false;
+}
+void removeRedundantFanin(Node* redundantNode, Node* newNode)
+{
+	for (int i = 0; i < redundantNode->fanout.size(); ++i) {
+		Node* fanoutNode = redundantNode->fanout[i];
+		//newNode fanout push into fanoutNode
+		newNode->fanout.push_back(fanoutNode);
+		//fanoutNode fanin push into newNode
+		fanoutNode->fanin.push_back(newNode);
+		//remove redundant faninNode
+		for (int j = 0; j < fanoutNode->fanin.size(); ++j) {
+			if (fanoutNode->fanin[j] == redundantNode) {
+				fanoutNode->fanin.erase(fanoutNode->fanin.begin() + j);
+				break;
+			}
+		}
+	}
+}
+void removeRedundantFanout(Node* faninNode, set<Node*>& redundantNode)
+{
+	for (int i = 0; i < faninNode->fanout.size(); ++i) {
+		Node* fanoutNode = faninNode->fanout[i];
+		//remove redundant faninNode
+		if (redundantNode.find(fanoutNode) != redundantNode.end())
+			faninNode->fanout.erase(faninNode->fanout.begin() + i);
+	}
+}
+void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<Node*, bool>& oldGoldenRemoveNode)
+{
+	for (int i = 0; i < currPatchGraph.PI.size(); ++i) {
+		Node* PInode = currPatchGraph.PI[i];
+		for (int j = 0; j < PInode->fanout.size(); ++j) {
+			Node* fanoutNode = PInode->fanout[j];
+			if ((newGoldenRemoveNode.find(fanoutNode) == newGoldenRemoveNode.end()) &&
+				oldGoldenRemoveNode.find(fanoutNode) != oldGoldenRemoveNode.end()) {
+				PInode->fanout.erase(PInode->fanout.begin() + j);
+				j--;
+			}
+		}
+	}
+
+	for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
+		Node* POnode = currPatchGraph.PO[i];
+		for (int j = 0; j < POnode->fanin.size(); ++j) {
+			Node* faninNode = POnode->fanin[j];
+			if ((newGoldenRemoveNode.find(faninNode) == newGoldenRemoveNode.end()) &&
+				oldGoldenRemoveNode.find(faninNode) != oldGoldenRemoveNode.end()) {
+				POnode->fanin.erase(POnode->fanin.begin()+j);
+				j--;
+			}
+		}
+	}
+}
+
+int selectBlifGateType(ifstream& infile)
+{
+	string gateTypeLine;
+	//get the next line to know the gate type
+	getline(infile, gateTypeLine);
+	if (gateTypeLine == "0 1") return 0;// not
+	else if (gateTypeLine == "11 1") return 1; // and 
+	else if (gateTypeLine == "00 0") return 2;// or
+	else if (gateTypeLine == "11 0") return 3;// nand
+	else if (gateTypeLine == "00 1") return 4;// nor
+	else if (gateTypeLine == "1 1") return 8;// assign and buffer
+	else if (gateTypeLine == " 0") return 80;// assgin constant 0
+	else if (gateTypeLine == " 1") return 81;// assgin constant 1
+	else if (gateTypeLine == "10 1") return 110; // and (ab')
+	else if (gateTypeLine == "01 1") return 101; // and (a'b)
+	else if (gateTypeLine == "10 0") return 210; // and (a'+b)
+	else if (gateTypeLine == "01 0") return 201; // and (a+b')
+
+	//error gate type
+	cout << "Patch Ocurr Error Gate Type!" << endl;
+	return -1;
 
 }
 
