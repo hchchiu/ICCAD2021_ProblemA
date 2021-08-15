@@ -1,4 +1,4 @@
-﻿#include<iostream>
+#include<iostream>
 #include<fstream>
 #include<sstream>
 #include<time.h>
@@ -17,9 +17,7 @@ using namespace std;
 #define GetBit(p, i)  (((p)[(i)>>5]  & (1<<((i) & 31))) > 0)
 #define SetBit(p, i)  ((p)[(i)>>5] |= (1<<((i) & 31)))
 #define UnSetBit(p, i)  ((p)[(i)>>5] ^= (1<<((i) & 31)))
-
-// 556sdas...
-
+// if one node's fanin have two same nodes could have error...
 struct Node
 {
 	string name;
@@ -57,7 +55,7 @@ struct MatchInfo
 	vector<Node*> goldenNode; //the remains is matched
 	set<Node*> originSupprotSet; //record support set
 	set<Node*> goldenSupprotSet; //record support set
-	map<Node*, Node*> backmatches; //record PO to PI structure match and fanout only one
+	map<Node*, Node*> backMatches; //record PO to PI structure match and fanout only one
 };
 
 struct NameCompare
@@ -145,13 +143,11 @@ bool readSATsolverResult();
 void abcBlif2CNF();
 
 
-//PO to PI search
-void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo);
-//
-void backMatchProcessing(Graph origin, Graph golden, MatchInfo& matchInfo);
-//
-void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo);
-//
+// From PO to PI Comapre
+void backStructureComapre(Graph origin, Graph golden, MatchInfo& matchInfo);
+// Check PO to PI all path gate type equal 
+void backCheckStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo);
+// Check gate type equal
 bool checkGateTypeEqual(Node* origin, Node* golden);
 
 
@@ -173,22 +169,39 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 string getTypeString(int type);
 // outfile declare variable
 void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, int& cost);
+// patch format
+string generatePatchFormat(Node* node);
+// is constant
+void isConstantCondition(string& name, map<string, bool>& useConstant, Node* node, int& totalCost);
+// is in match
+void isInMatchCondition(string& name, map<Node*, Node*> matches, Node* node, map<Node*, string>& inputDeclareMap);
+// is in goldenremoveNode
+void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* node);
+// is randomsimulation remove from goldenremovenode and need to declare this leaking gate
+void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string>& newGateMap);
 
-// Output patch
-void outFile(Graph graph, char* argv);
-// Process same node name but multi Bracket(like op[0],op[1],op[2],.....) and count name times
-void strExtractBracket(Graph graph, vector<Node>& pi_items, vector<Node>& po_items);
-// Output declare type(input/output/wire)
-void outputFront(ofstream& outfile, vector<Node> p, string str);
-// Output gate
-void gateOutput(ofstream& outfile, Graph graph);
-// Sort by type and number count
-bool typeAndNumberCompare(const Node& p1, const Node& p2);
-// Sort by node name
-bool strTitleCompare(const string& p1, const string& p2);
 
-//start optimitze patch
+
+//// Output patch
+//void outFile(Graph graph, char* argv);
+//// Process same node name but multi Bracket(like op[0],op[1],op[2],.....) and count name times
+//void strExtractBracket(Graph graph, vector<Node>& pi_items, vector<Node>& po_items);
+//// Output declare type(input/output/wire)
+//void outputFront(ofstream& outfile, vector<Node> p, string str);
+//// Output gate
+//void gateOutput(ofstream& outfile, Graph graph);
+//// Sort by type and number count
+//bool typeAndNumberCompare(const Node& p1, const Node& p2);
+//// Sort by node name
+//bool strTitleCompare(const string& p1, const string& p2);
+
+
 void patchOptimize(MatchInfo& matchInfo);
+
+
+//void createRectifyPair(Graph& R2, Graph& G1);
+//bool pisetIsDifferent(Node object, Node golden);
+
 //out patch blif to optimize
 void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch);
 //read optimized patch blif file
@@ -214,8 +227,7 @@ void removeRedundantFanout(Node* faninNode, set<Node*>& redundantNode);
 void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<Node*, bool>& oldGoldenRemoveNode);
 
 
-void createRectifyPair(Graph& R2, Graph& G1);
-bool pisetIsDifferent(Node object, Node golden);
+
 bool seedIsDifferent(Node* origin, Node* golden);
 
 //tool function
@@ -265,7 +277,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
    -------------------------------------------------------------------------------------
 	   |
    -------------------------------------------------------------------------------------
-	patchVerify  ->  checkRemoveNodeFaninExist
+	NewpatchVerify  ->  checkRemoveNodeFaninExist
 		.		 ->  faninIsPI
 		.		 ->  compareNetlist  ->  outputPatchDotNames
 						   .         ->  outputConst
@@ -333,19 +345,28 @@ int main(int argc, char* argv[])
 			cout << pos << endl;
 	}
 	*/
-
-
 	//check seed and do SAT solver
-	/*randomSimulation(matchInfo);*/
-
-	//backStructureSearch(G1, R2, matchInfo);
-
-	//start optimize patch with abc tool
-	patchOptimize(matchInfo);
-
+	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
+		if (it->first->name == "n_505")
+			cout << "505---\n";
+		if (it->first->name == "n_264")
+			cout << "264---\n";
+	}*/
+	randomSimulation(matchInfo);
+	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
+		if (it->first->name == "n_505")
+			cout << "505***\n";
+		if (it->first->name == "n_264")
+			cout << "264***\n";
+	}*/
+	//cout << "after random\n";
+	backStructureComapre(G1, R2, matchInfo);
+	//cout << "after back\n";
 	//start create and verify patch
 	//patchVerify(matchInfo, R2, G1);
 
+	//start optimize patch with abc tool
+	//patchOptimize(matchInfo);
 
 	//output the patch.v
 	//generatePatchVerilog(matchInfo, R2, G1, argv[4]);
@@ -1046,6 +1067,10 @@ void randomSimulation(MatchInfo& matchInfo)
 					}
 				}
 			}
+			/*else if (og_it->first->type == 10 && gd_it->first->type == 10) {
+				if (og_it->first->name == gd_it->first->name)
+					cout << og_it->first->name << endl;
+			}*/
 		}
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
@@ -1187,6 +1212,7 @@ void outputConst(ofstream& outfile, vector<bool>& faninConst)
 		outfile << ".names 1'b1" << endl
 			<< "1" << endl;
 	}
+
 }
 
 void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
@@ -1206,9 +1232,9 @@ void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 
 	outfile << ".names";
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
-		if (currNode->fanin[i]->graphName == currGraphName || currGraphName == "patch") {
+		if (currNode->fanin[i]->graphName == currGraphName) {
 			outfile << " " << currNode->fanin[i]->name;
-			if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1")
+			if (currNode->fanin[i]->type != 9)
 				outfile << "_" + currGraphName;
 		}
 	}
@@ -1232,7 +1258,8 @@ void node2Blif(ofstream& outfile, Node* currNode, int type)
 			outfile << "11 1" << endl;
 		//or gate
 		else if (type == 2) {
-			outfile << "00 0" << endl;
+			outfile << "-1 1" << endl
+				<< "1- 1" << endl;
 		}
 		//nand gate
 		else if (type == 3) {
@@ -1330,7 +1357,7 @@ void abcBlif2CNF()
 	system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
 }
 
-void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo)
+void backStructureComapre(Graph origin, Graph golden, MatchInfo& matchInfo)
 {
 	map<string, Node*> originPoMap;
 	map<string, Node*> goldenPoMap;
@@ -1347,67 +1374,82 @@ void backStructureSearch(Graph origin, Graph golden, MatchInfo& matchInfo)
 
 	for (map<string, Node*>::iterator it = originPoMap.begin(); it != originPoMap.end(); ++it) {
 		Node* originNode = it->second;
-		Node* goldenNode = nullptr;
+		Node* goldenNode = 0;
 		if (matchInfo.originRemoveNode.find(originNode) == matchInfo.originRemoveNode.end())
 			continue;
 		if (goldenPoMap.find(it->first) != goldenPoMap.end())
 			goldenNode = goldenPoMap.find(it->first)->second;
-		if (goldenNode == nullptr || matchInfo.goldenRemoveNode.find(goldenNode) == matchInfo.goldenRemoveNode.end())
+		if (matchInfo.originRemoveNode.find(originNode) == matchInfo.originRemoveNode.end())
+			continue;
+		if (goldenNode == 0 || matchInfo.goldenRemoveNode.find(goldenNode) == matchInfo.goldenRemoveNode.end())
+			continue;
+		if (originNode->fanout.size() != 0 || goldenNode->fanout.size() != 0)
+			continue;
+		if (getTypeString(originNode->realGate) == "assign" || getTypeString(goldenNode->realGate) == "assign")
 			continue;
 		if (checkGateTypeEqual(originNode, goldenNode))
-			checkPOStructureEqual(originNode, goldenNode, matchInfo);
+			backCheckStructureEqual(originNode, goldenNode, matchInfo);
 	}
 
 	int k = 0;
 }
 
 
-void checkPOStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
+void backCheckStructureEqual(Node* origin, Node* golden, MatchInfo& matchInfo)
 {
 	map<Node*, bool> originFaninMap;
 	map<Node*, bool> goldenFaninMap;
-	map<Node*, Node*> matchNow;
+	map<Node*, Node*> currentMatch;
 
+	// check in removeOriginNode and put into Map 
 	for (int i = 0; i < origin->fanin.size(); i++) {
 		if (origin->fanin[i]->name == "1'b1" || origin->fanin[i]->name == "1'b0")
 			originFaninMap[origin->fanin[i]] = true;
-		else if (origin->fanin[i]->fanout.size() < 2 && matchInfo.originRemoveNode.find(origin->fanin[i]) != matchInfo.originRemoveNode.end())
+		else if (matchInfo.originRemoveNode.find(origin->fanin[i]) == matchInfo.originRemoveNode.end()) //match or have been recognize in randomSimulation
+			continue;
+		else if (origin->fanin[i]->fanout.size() < 2)
 			originFaninMap[origin->fanin[i]] = true;
 	}
 
+	// check in removeGoldenNode and put into Map 
 	for (int i = 0; i < golden->fanin.size(); i++) {
 		if (golden->fanin[i]->name == "1'b1" || golden->fanin[i]->name == "1'b0")
 			goldenFaninMap[golden->fanin[i]] = true;
-		else if (golden->fanin[i]->fanout.size() < 2 && matchInfo.goldenRemoveNode.find(golden->fanin[i]) != matchInfo.goldenRemoveNode.end())
+		else if (matchInfo.goldenRemoveNode.find(golden->fanin[i]) == matchInfo.goldenRemoveNode.end()) //match or have been recognize in randomSimulations
+			continue;
+		else if (golden->fanin[i]->fanout.size() < 2)
 			goldenFaninMap[golden->fanin[i]] = true;
 	}
 
-
+	// check fanin match
 	for (map<Node*, bool>::iterator goldenptr = goldenFaninMap.begin(); goldenptr != goldenFaninMap.end(); ++goldenptr) {
-		Node* originNode = nullptr;
+		Node* originNode = 0;
 		Node* goldenNode = goldenptr->first;
 		for (map<Node*, bool>::iterator originptr = originFaninMap.begin(); originptr != originFaninMap.end(); ++originptr) {
 			originNode = originptr->first;
 			if (checkGateTypeEqual(originNode, goldenNode)) {
-				matchNow[goldenNode] = originNode;
+				currentMatch[goldenNode] = originNode;
 				originFaninMap.erase(originNode);
 				break;
 			}
 		}
 	}
 
-	if (matchNow.size() == origin->fanin.size()) {
+	// chaeck all fanin is matching
+	if (currentMatch.size() == origin->fanin.size()) {
 		matchInfo.matches[golden] = origin;
-		for (map<Node*, Node*>::iterator it = matchNow.begin(); it != matchNow.end(); ++it) {
+		for (map<Node*, Node*>::iterator it = currentMatch.begin(); it != currentMatch.end(); ++it) {
 			Node* originNode = it->second;
 			Node* goldenNode = it->first;
 			if (originNode->name == "1'b1" || originNode->name == "1'b0")
 				continue;
-			checkPOStructureEqual(originNode, goldenNode, matchInfo);
+			if (goldenNode->name == "1'b1" || goldenNode->name == "1'b0")
+				continue;
+			backCheckStructureEqual(originNode, goldenNode, matchInfo);
 		}
 	}
 	else
-		matchInfo.backmatches[golden] = origin;
+		matchInfo.backMatches[golden] = origin;
 
 	if (matchInfo.originRemoveNode.find(origin) != matchInfo.originRemoveNode.end())
 		matchInfo.originRemoveNode.erase(origin);
@@ -1425,6 +1467,8 @@ bool checkGateTypeEqual(Node* origin, Node* golden)
 		if (origin->name != golden->name)
 			return false;
 	if (origin->type != golden->type || origin->realGate != golden->realGate)
+		return false;
+	if (origin->realGate == 8 || golden->realGate == 8)
 		return false;
 	return true;
 }
@@ -1661,163 +1705,153 @@ bool pisetIsDifferent(Node object, Node golden)
 void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv)
 {
 	ofstream outfile(argv);
-	set<Node*> input;
-	set<Node*> output;
-	map<Node*, string> inputDeclare;
-	map<Node*, string> outputDeclare;
-	map<Node*, string> newGate;
-	map<Node*, bool> goldenRemoveNode = matchInfo.goldenRemoveNode;
-	vector<string> instructions;
-	map<string, bool> useConst;
-	useConst["1'b0"] = false;
-	useConst["1'b1"] = false;
-	int eco = 1;
-	int cost = 0;
-	for (map<Node*, bool>::iterator it = goldenRemoveNode.begin(); it != goldenRemoveNode.end(); ++it) {
-		Node* curr = it->first;
-		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
-		// fanin
-		for (int i = 0; i < curr->fanin.size(); i++) {
-			Node* fanin = curr->fanin[i];
-			if (fanin->name == "1'b0" || fanin->name == "1'b1") {
-				names[i] = fanin->name;
-				if (!useConst[fanin->name]) {
-					cost += 1;
-					useConst[fanin->name] = true;
-				}
-			}
-			else if (matchInfo.matches.find(fanin) != matchInfo.matches.end()) { //have match ((PI and match gate
-				Node* realfanin = matchInfo.matches.find(fanin)->second;
-				if (realfanin->name.find('[') != string::npos)
-					names[i] = "\\" + realfanin->name + " ";
-				else
-					names[i] = realfanin->name;
-				inputDeclare[realfanin] = names[i];
-			}
-			else if (matchInfo.backmatches.find(fanin) != matchInfo.backmatches.end()) {
-				Node* realfanin = matchInfo.backmatches.find(fanin)->second;
-				if (realfanin->name.find('[') != string::npos)
-					names[i] = "\\" + realfanin->name + " ";
-				else
-					names[i] = realfanin->name;
-				inputDeclare[realfanin] = names[i];
-			}
-			else {
-				string faninName = "n" + fanin->name;
-				if (fanin->type == 10) { //PO
-					if (fanin->name.find("[") != string::npos)
-						faninName = "\\" + fanin->name + " ";
-					else
-						faninName = fanin->name;
-					if (matchInfo.goldenRemoveNode.find(fanin) != matchInfo.goldenRemoveNode.end()) {
-						//faninName += "_in";
-					}
-					else
-						inputDeclare[fanin] = faninName;
-				}
-				else if (faninName.find("[") != string::npos) {
-					string req = faninName.substr(faninName.find("[") + 1, faninName.find("]") - faninName.find("[") - 1);
-					faninName = faninName.substr(0, faninName.find("[")) + req;
-				}
-				names[i] = faninName;
-			}
-		}
-		// node+
-		if (curr->name == "1'b0" || curr->name == "1'b1")
-			continue;
-		else if (curr->type == 10) {
-			string name = curr->name;
-			if (name.find("[") != string::npos)
-				name = "\\" + name + " ";
-			names[2] = name;
-			//newGate[curr] = name;
-			outputDeclare[curr] = name;
-		}
-		else if (curr->type == 9) {
-			cout << "ERROR IN GENERATE PATCH VERILOG!!";
-		}
-		else if (curr->name == "1'b0" || curr->name == "1'b1")
-			continue;
-		else {
-			string name = "n" + curr->name;
-			if (name.find("[") != string::npos) {
-				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
-				name = name.substr(0, name.find("[")) + req;
-			}
-			names[2] = name;
-			newGate[curr] = name;
-		}
-		instructions.push_back(generateInstruction(curr, names, eco++, cost));
-	}
+	map<Node*, string> inputDeclareMap; //module(....) input....
+	map<Node*, string> outputDeclareMap; //module(....) output....
+	map<Node*, string> newGateMap; //wire...
+	map<Node*, Node*> matches = matchInfo.matches;
+	map<Node*, Node*> backMatches = matchInfo.backMatches;
+	map<Node*, bool> originRemoveNode = matchInfo.originRemoveNode; //inherit
+	map<Node*, bool> goldenRemoveNode = matchInfo.goldenRemoveNode; //inherit
+	vector<Node*> leakingNodeVec;
+	vector<string> instructionSet; //and(X,X,X)....
+	map<string, bool> useConstant{ {"1'b0",false},{"1'b1",false} }; //check whether using constant
+	int ecoNumber = 1;
+	int totalCost = 0;
 
-	for (map<Node*, Node*>::iterator it = matchInfo.backmatches.begin(); it != matchInfo.backmatches.end(); ++it) {
+	// PO-PI's match handler
+	for (map<Node*, Node*>::iterator it = backMatches.begin(); it != backMatches.end(); ++it) {
 		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
 		Node* originNode = it->second;
 		Node* goldenNode = it->first;
-		if (originNode->name.find("[") != string::npos)
-			names[2] = "\\" + originNode->name + " ";
-		else
-			names[2] = originNode->name;
-		outputDeclare[originNode] = names[2];
+		//originNode->fanin.clear();
+		//originNode->fanin.resize(goldenNode->fanin.size());
+
+		// fanin node
 		for (int i = 0; i < goldenNode->fanin.size(); i++) {
-			if (goldenNode->fanin[i]->name == "1'b1" || goldenNode->fanin[i]->name == "1'b0")
-				names[i] = goldenNode->fanin[i]->name;
-			else if (matchInfo.matches.find(goldenNode->fanin[i]) != matchInfo.matches.end()) {
-				Node* node = matchInfo.matches.find(goldenNode->fanin[i])->second;
-				string name = node->name;
-				if (name.find('[') != string::npos)
-					name = "\\" + name + " ";
-				inputDeclare[node] = name;
-				names[i] = name;
-			}
-			else if (newGate.find(goldenNode->fanin[i]) != newGate.end()) {
-				names[i] = newGate.find(goldenNode->fanin[i])->second;
-			}
-			else if (matchInfo.backmatches.find(goldenNode->fanin[i]) != matchInfo.backmatches.end()) {
-				Node* node = matchInfo.backmatches.find(goldenNode->fanin[i])->second;
-				string name = node->name;
-				if (name.find('[') != string::npos)
-					name = "\\" + name + " ";
-				inputDeclare[node] = name;
-				names[i] = name;
-				cout << "ERROR\n";
+			Node* faninNode = goldenNode->fanin[i];
+			if (faninNode->name == "1'b0" || faninNode->name == "1'b1") // is constant
+				isConstantCondition(names[i], useConstant, faninNode, totalCost);
+			else if (matches.find(faninNode) != matches.end())   // in match
+				isInMatchCondition(names[i], matches, faninNode, inputDeclareMap);
+			else if (goldenRemoveNode.find(faninNode) != goldenRemoveNode.end()) // in goldenRemoveNode
+				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
+			else
+				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
+
+			if (names[i] == "") { //have error
+				cout << "PO to PI generate patch Error!\n";
 			}
 		}
-		instructions.push_back(generateInstruction(originNode, names, eco++, cost));
+		names[2] = generatePatchFormat(originNode);
+		outputDeclareMap[originNode] = names[2];
+		instructionSet.push_back(generateInstruction(originNode, names, ecoNumber++, totalCost));
 	}
+	//cout << "after po-pi\n";
+	// goldenRemoveNode handler
+	for (map<Node*, bool>::iterator it = goldenRemoveNode.begin(); it != goldenRemoveNode.end(); ++it) {
+		Node* currentNode = it->first;
+		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
+		// fanin node
+		for (int i = 0; i < currentNode->fanin.size(); i++) {
+			Node* faninNode = currentNode->fanin[i];
+			if (faninNode->name == "1'b0" || faninNode->name == "1'b1") // is constant
+				isConstantCondition(names[i], useConstant, faninNode, totalCost);
+			else if (matches.find(faninNode) != matches.end())  // in match
+				isInMatchCondition(names[i], matches, faninNode, inputDeclareMap);
+			else if (goldenRemoveNode.find(faninNode) != goldenRemoveNode.end()) // in goldenRemoveNode
+				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
+			else
+				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
+			if (names[i] == "") { //have error
+				cout << "goldenRemoveNode generate patch Error!\n";
+			}
+		}
+		names[2] = generatePatchFormat(currentNode);
+		if (currentNode->type == 10)
+			outputDeclareMap[currentNode] = names[2];
+		instructionSet.push_back(generateInstruction(currentNode, names, ecoNumber++, totalCost));
+	}
+	//cout << "after goldenRemoveNode\n";
+
+	//leakingNode handler
+	for (int i = 0; i < leakingNodeVec.size(); i++) {
+		Node* currentNode = leakingNodeVec[i];
+		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
+		// fanin node
+		for (int i = 0; i < currentNode->fanin.size(); i++) {
+			Node* faninNode = currentNode->fanin[i];
+			if (faninNode->name == "1'b0" || faninNode->name == "1'b1") // is constant
+				isConstantCondition(names[i], useConstant, faninNode, totalCost);
+			else if (matches.find(faninNode) != matches.end())  // in match
+				isInMatchCondition(names[i], matches, faninNode, inputDeclareMap);
+			else if (goldenRemoveNode.find(faninNode) != goldenRemoveNode.end()) // in goldenRemoveNode
+				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
+			else
+				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
+
+			if (names[i] == "") { //have error
+				cout << "leakingNode generate patch Error!\n";
+			}
+		}
+		names[2] = generatePatchFormat(currentNode);
+		instructionSet.push_back(generateInstruction(currentNode, names, ecoNumber++, totalCost));
+
+	}
+	//cout << "after leakingNode\n";
+
+
+	// output file
 	outfile << "module top_eco(";
-	map<Node*, string>::iterator it = inputDeclare.begin();
-	outfile << it->second;
-	++it;
-	for (; it != inputDeclare.end(); ++it) {
-		if (outputDeclare.find(it->first) != outputDeclare.end())
+
+	// module(input.....)
+	int count = 0;
+	for (map<Node*, string>::iterator it = inputDeclareMap.begin(); it != inputDeclareMap.end(); ++it) {
+		if (count == 0) {
+			outfile << it->second;
+			count++;
+			continue;
+		}
+		if (outputDeclareMap.find(it->first) != outputDeclareMap.end()) //output prior to input
 			continue;
 		if (it->second.find("\\") == string::npos)
 			outfile << ", " << it->second;
 		else
 			outfile << "," << it->second;
 	}
-	for (it = outputDeclare.begin(); it != outputDeclare.end(); ++it) {
-		if (inputDeclare.find(it->first) != inputDeclare.end())
-			inputDeclare.erase(it->first);
-		if (it->second.find("\\") == string::npos)
+	//cout << "after input\n";
+
+	// module(output.....)
+	for (map<Node*, string>::iterator it = outputDeclareMap.begin(); it != outputDeclareMap.end(); ++it) {
+		if (inputDeclareMap.find(it->first) != inputDeclareMap.end())
+			inputDeclareMap.erase(it->first);
+		if (count == 0) {
+			outfile << it->second;
+			count++;
+			continue;
+		}
+		else if (it->second.find("\\") == string::npos)
 			outfile << ", " << it->second;
 		else
 			outfile << "," << it->second;
+
 	}
 	outfile << ");\n";
+	//cout << "after output\n";
+	// input.... output....  wire....
+	cout << totalCost << "\n";
+	generateDeclare(inputDeclareMap, "input", outfile, totalCost);
+	cout << totalCost << "\n";
+	generateDeclare(outputDeclareMap, "output", outfile, totalCost);
+	cout << totalCost << "\n";
+	generateDeclare(newGateMap, "wire", outfile, totalCost);
+	cout << totalCost << "\n";
 
-	generateDeclare(inputDeclare, "input", outfile, cost);
-	generateDeclare(outputDeclare, "output", outfile, cost);
-	generateDeclare(newGate, "wire", outfile, cost);
-
-	for (int i = 0; i < instructions.size(); i++)
-		outfile << instructions[i] << "\n";
+	// and or not....
+	for (int i = 0; i < instructionSet.size(); i++)
+		outfile << instructionSet[i] << "\n";
 	outfile << "endmodule\n";
-	//outfile << "// cost:" << cost;
-	cout << "// cost:" << cost << "\n";
-	int i = 0;
+	cout << "// cost:" << totalCost << "\n";
 }
 
 string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
@@ -1852,6 +1886,10 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 
 string getTypeString(int type)
 {
+	if (type == -1) {
+		cout << "getTypeString function error!! (type==-1)" << endl;
+		return "error";
+	}
 	vector<string> gates = { "not","and","or","nand","nor","xor","xnor","buf","assign","PI","PO" };
 	return gates[type];
 }
@@ -1907,207 +1945,243 @@ void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, i
 }
 
 
-void outFile(Graph graph, char* argv)
+string generatePatchFormat(Node* node)
 {
-	ofstream outfile(argv);
-	vector<Node> pi_items;
-	vector<Node> po_items;
-	// ExtractBracket PI/PO
-	strExtractBracket(graph, pi_items, po_items);
-	outfile << "module top_eco(";
-	for (int i = 0; i < pi_items.size(); i++)
-		outfile << pi_items[i].name << ", ";
-	for (int i = 0; i < po_items.size(); i++) {
-		if (i != po_items.size() - 1)
-			outfile << po_items[i].name << ", ";
-		else
-			outfile << po_items[i].name << ");\n";
+	string name = node->name;
+	if (name == "1'b1" || name == "1'b0")
+		return name;
+	else if (node->graphName == "G1") {
+		if (name.find("[") != string::npos)
+			name = "\\" + name + " ";
 	}
-	sort(pi_items.begin(), pi_items.end(), typeAndNumberCompare);
-	sort(po_items.begin(), po_items.end(), typeAndNumberCompare);
-	outputFront(outfile, pi_items, "  input ");
-	outputFront(outfile, po_items, "  output ");
-	outputFront(outfile, pi_items, "  wire ");
-	outputFront(outfile, po_items, "  wire ");
-
-	vector<string> wireOutput;
-	for (int i = 0; i < graph.netlist.size(); ++i)
-		if (graph.netlist[i]->type < 9 && graph.netlist[i]->name.find("'b") == string::npos)
-			wireOutput.push_back(graph.netlist[i]->name);
-	sort(wireOutput.begin(), wireOutput.end(), strTitleCompare);
-	for (int i = 0, counter = 1; i < wireOutput.size(); i++) {
-		if (counter == 1 && i != wireOutput.size() - 1)
-			outfile << "  wire " << wireOutput[i] << ", ";
-		else if (counter == 1)
-			outfile << "  wire " << wireOutput[i] << ";\n";
-		else if (counter < 8 && i != wireOutput.size() - 1)
-			outfile << wireOutput[i] << ", ";
-		else if (counter < 8)
-			outfile << wireOutput[i] << ";\n";
+	else if (node->graphName == "R2") {
+		if (node->type == 10) { //is PO reprent it need to be using G1's PO
+			if (name.find("[") != string::npos)
+				name = "\\" + name + " ";
+		}
 		else {
-			outfile << wireOutput[i] << ";\n";
-			counter = 0;
-		}
-		counter++;
-	}
-	gateOutput(outfile, graph);
-	outfile << "endmodule\n";
-	outfile.close();
-}
-void strExtractBracket(Graph graph, vector<Node>& pi_items, vector<Node>& po_items)
-{
-	for (int i = 0; i < graph.PI.size(); i++) {
-		bool is_exist = false;
-		Node req;
-		req.type = graph.PI[i]->type;
-		req.seeds = new unsigned[1];
-		req.seeds[0] = 1;
-		if (graph.PI[i]->name.find("[") != string::npos)
-			req.name = graph.PI[i]->name.substr(0, graph.PI[i]->name.find('['));
-		else
-			req.name = graph.PI[i]->name;
-		for (int j = pi_items.size() - 1; j >= 0; j--)
-			if (pi_items[j].name == req.name) { pi_items[j].seeds[0]++; is_exist = true; break; }
-		if (!is_exist)
-			pi_items.push_back(req);
-	}
-	for (int i = 0; i < graph.PO.size(); i++) {
-		bool is_exist = false;
-		Node req;
-		req.type = graph.PO[i]->type;
-		req.seeds = new unsigned[1];
-		req.seeds[0] = 1;
-		if (graph.PO[i]->name.find("[") != string::npos)
-			req.name = graph.PO[i]->name.substr(0, graph.PO[i]->name.find('['));
-		else
-			req.name = graph.PO[i]->name;
-		for (int j = po_items.size() - 1; j >= 0; j--)
-			if (po_items[j].name == req.name) { po_items[j].seeds[0]++; is_exist = true; break; }
-		if (!is_exist)
-			po_items.push_back(req);
-	}
-}
-void outputFront(ofstream& outfile, vector<Node> p, string str)
-{
-	for (int i = 0; i < p.size(); i++) {
-		unsigned int* current_num = p[i].seeds;
-		vector<string> vec;
-		vec.push_back(p[i].name);
-		for (int j = i + 1; j < p.size(); j++) {
-			if (*current_num == *p[j].seeds)
-				vec.push_back(p[j].name);
-			else {
-				i = j - 1;
-				break;
+			if (name.find("[") != string::npos) {  // in R2 represent it need to be add new gate
+				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
+				name = name.substr(0, name.find("[")) + req;
+				name = "patchNew_" + name;
 			}
-			if (j == p.size() - 1)
-				i = j;
-		}
-		outfile << str;
-		if (*current_num > 1) {
-			stringstream ss;
-			ss << (*current_num - 1);
-			string req = ss.str();
-			outfile << "[" << req << ":0] ";
-		}
-		for (int j = 0; j < vec.size(); j++) {
-			if (j != vec.size() - 1)
-				outfile << vec[j] << ", ";
 			else
-				outfile << vec[j] << ";\n";
+				name = "patchNew_" + name;
 		}
+
+	}
+	return name;
+}
+
+void isConstantCondition(string& name, map<string, bool>& useConstant, Node* node, int& totalCost)
+{
+	name = generatePatchFormat(node);
+	if (useConstant[node->name] == false) {
+		useConstant[node->name] = true;
+		totalCost++;
 	}
 }
-void gateOutput(ofstream& outfile, Graph graph)
+
+void isInMatchCondition(string& name, map<Node*, Node*> matches, Node* node, map<Node*, string>& inputDeclareMap)
 {
-	for (int gatenum = 0; gatenum < graph.netlist.size(); ++gatenum) {
-		int type = graph.netlist[gatenum]->type;
-		int realGate = graph.netlist[gatenum]->realGate;
-		stringstream ss;
-		ss << gatenum;
-		if (type != -1 && type != 9) {
-			if (type == 0 || realGate == 0)
-				outfile << "  not eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 1 || realGate == 1)
-				outfile << "  and eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 2 || realGate == 2)
-				outfile << "  or eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 3 || realGate == 3)
-				outfile << "  nand eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 4 || realGate == 4)
-				outfile << "  nor eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 5 || realGate == 5)
-				outfile << "  xor eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 6 || realGate == 6)
-				outfile << "  xnor eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			else if (type == 7 || realGate == 7)
-				outfile << "  buf eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
-			if (type == 8 || realGate == 8)
-				outfile << "  assign " << graph.netlist[gatenum]->name << " = " << graph.netlist[gatenum]->fanin[0]->name << ";\n";
-			else {
-				for (int i = 0; i < graph.netlist[gatenum]->fanin.size(); i++) {
-					if (i == graph.netlist[gatenum]->fanin.size() - 1)
-						outfile << graph.netlist[gatenum]->fanin[i]->name << ");\n";
-					else
-						outfile << graph.netlist[gatenum]->fanin[i]->name << ", ";
-				}
-			}
-		}
+	Node* faninMatchNode = matches.find(node)->second;
+	name = generatePatchFormat(faninMatchNode);
+	inputDeclareMap[faninMatchNode] = name; //have risk need to solve in behind cout condition
+}
+
+void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* node)
+{
+	name = generatePatchFormat(node);
+	if (node->type != 10)
+		newGateMap[node] = name;
+}
+
+void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string> &newGateMap)
+{
+	name = generatePatchFormat(node);
+	if (newGateMap.find(node) == newGateMap.end()) {
+		leakingNodeVec.push_back(node);
+		newGateMap[node] = name;
 	}
+
 }
-bool typeAndNumberCompare(const Node& p1, const Node& p2)
-{
-	if (*p1.seeds == *p2.seeds)
-		return p1.name < p2.name;
-	return *p1.seeds < *p2.seeds;
-}
-bool strTitleCompare(const string& p1, const string& p2)
-{
-	if (p1.size() == p2.size())
-		return p1 < p2;
-	else
-		return p1.size() < p2.size();
-}
+
+
+//void outFile(Graph graph, char* argv)
+//{
+//	ofstream outfile(argv);
+//	vector<Node> pi_items;
+//	vector<Node> po_items;
+//	// ExtractBracket PI/PO
+//	strExtractBracket(graph, pi_items, po_items);
+//	outfile << "module top_eco(";
+//	for (int i = 0; i < pi_items.size(); i++)
+//		outfile << pi_items[i].name << ", ";
+//	for (int i = 0; i < po_items.size(); i++) {
+//		if (i != po_items.size() - 1)
+//			outfile << po_items[i].name << ", ";
+//		else
+//			outfile << po_items[i].name << ");\n";
+//	}
+//	sort(pi_items.begin(), pi_items.end(), typeAndNumberCompare);
+//	sort(po_items.begin(), po_items.end(), typeAndNumberCompare);
+//	outputFront(outfile, pi_items, "  input ");
+//	outputFront(outfile, po_items, "  output ");
+//	outputFront(outfile, pi_items, "  wire ");
+//	outputFront(outfile, po_items, "  wire ");
+//
+//	vector<string> wireOutput;
+//	for (int i = 0; i < graph.netlist.size(); ++i)
+//		if (graph.netlist[i]->type < 9 && graph.netlist[i]->name.find("'b") == string::npos)
+//			wireOutput.push_back(graph.netlist[i]->name);
+//	sort(wireOutput.begin(), wireOutput.end(), strTitleCompare);
+//	for (int i = 0, counter = 1; i < wireOutput.size(); i++) {
+//		if (counter == 1 && i != wireOutput.size() - 1)
+//			outfile << "  wire " << wireOutput[i] << ", ";
+//		else if (counter == 1)
+//			outfile << "  wire " << wireOutput[i] << ";\n";
+//		else if (counter < 8 && i != wireOutput.size() - 1)
+//			outfile << wireOutput[i] << ", ";
+//		else if (counter < 8)
+//			outfile << wireOutput[i] << ";\n";
+//		else {
+//			outfile << wireOutput[i] << ";\n";
+//			counter = 0;
+//		}
+//		counter++;
+//	}
+//	gateOutput(outfile, graph);
+//	outfile << "endmodule\n";
+//	outfile.close();
+//}
+//void strExtractBracket(Graph graph, vector<Node>& pi_items, vector<Node>& po_items)
+//{
+//	for (int i = 0; i < graph.PI.size(); i++) {
+//		bool is_exist = false;
+//		Node req;
+//		req.type = graph.PI[i]->type;
+//		req.seeds = new unsigned[1];
+//		req.seeds[0] = 1;
+//		if (graph.PI[i]->name.find("[") != string::npos)
+//			req.name = graph.PI[i]->name.substr(0, graph.PI[i]->name.find('['));
+//		else
+//			req.name = graph.PI[i]->name;
+//		for (int j = pi_items.size() - 1; j >= 0; j--)
+//			if (pi_items[j].name == req.name) { pi_items[j].seeds[0]++; is_exist = true; break; }
+//		if (!is_exist)
+//			pi_items.push_back(req);
+//	}
+//	for (int i = 0; i < graph.PO.size(); i++) {
+//		bool is_exist = false;
+//		Node req;
+//		req.type = graph.PO[i]->type;
+//		req.seeds = new unsigned[1];
+//		req.seeds[0] = 1;
+//		if (graph.PO[i]->name.find("[") != string::npos)
+//			req.name = graph.PO[i]->name.substr(0, graph.PO[i]->name.find('['));
+//		else
+//			req.name = graph.PO[i]->name;
+//		for (int j = po_items.size() - 1; j >= 0; j--)
+//			if (po_items[j].name == req.name) { po_items[j].seeds[0]++; is_exist = true; break; }
+//		if (!is_exist)
+//			po_items.push_back(req);
+//	}
+//}
+//void outputFront(ofstream& outfile, vector<Node> p, string str)
+//{
+//	for (int i = 0; i < p.size(); i++) {
+//		unsigned int* current_num = p[i].seeds;
+//		vector<string> vec;
+//		vec.push_back(p[i].name);
+//		for (int j = i + 1; j < p.size(); j++) {
+//			if (*current_num == *p[j].seeds)
+//				vec.push_back(p[j].name);
+//			else {
+//				i = j - 1;
+//				break;
+//			}
+//			if (j == p.size() - 1)
+//				i = j;
+//		}
+//		outfile << str;
+//		if (*current_num > 1) {
+//			stringstream ss;
+//			ss << (*current_num - 1);
+//			string req = ss.str();
+//			outfile << "[" << req << ":0] ";
+//		}
+//		for (int j = 0; j < vec.size(); j++) {
+//			if (j != vec.size() - 1)
+//				outfile << vec[j] << ", ";
+//			else
+//				outfile << vec[j] << ";\n";
+//		}
+//	}
+//}
+//void gateOutput(ofstream& outfile, Graph graph)
+//{
+//	for (int gatenum = 0; gatenum < graph.netlist.size(); ++gatenum) {
+//		int type = graph.netlist[gatenum]->type;
+//		int realGate = graph.netlist[gatenum]->realGate;
+//		stringstream ss;
+//		ss << gatenum;
+//		if (type != -1 && type != 9) {
+//			if (type == 0 || realGate == 0)
+//				outfile << "  not eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 1 || realGate == 1)
+//				outfile << "  and eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 2 || realGate == 2)
+//				outfile << "  or eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 3 || realGate == 3)
+//				outfile << "  nand eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 4 || realGate == 4)
+//				outfile << "  nor eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 5 || realGate == 5)
+//				outfile << "  xor eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 6 || realGate == 6)
+//				outfile << "  xnor eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			else if (type == 7 || realGate == 7)
+//				outfile << "  buf eco_g" << ss.str() << " (" << graph.netlist[gatenum]->name << ", ";
+//			if (type == 8 || realGate == 8)
+//				outfile << "  assign " << graph.netlist[gatenum]->name << " = " << graph.netlist[gatenum]->fanin[0]->name << ";\n";
+//			else {
+//				for (int i = 0; i < graph.netlist[gatenum]->fanin.size(); i++) {
+//					if (i == graph.netlist[gatenum]->fanin.size() - 1)
+//						outfile << graph.netlist[gatenum]->fanin[i]->name << ");\n";
+//					else
+//						outfile << graph.netlist[gatenum]->fanin[i]->name << ", ";
+//				}
+//			}
+//		}
+//	}
+//}
+//bool typeAndNumberCompare(const Node& p1, const Node& p2)
+//{
+//	if (*p1.seeds == *p2.seeds)
+//		return p1.name < p2.name;
+//	return *p1.seeds < *p2.seeds;
+//}
+//bool strTitleCompare(const string& p1, const string& p2)
+//{
+//	if (p1.size() == p2.size())
+//		return p1 < p2;
+//	else
+//		return p1.size() < p2.size();
+//}
 
 
 void patchOptimize(MatchInfo& matchInfo)
 {
-	Graph currPatchGraph;
-	map<Node*, bool> isVisitedPatch;
+	Graph currPatch;
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
-	currPatchGraph.Constants.resize(2);
 	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
-		//push all golden remove node to currPatchGraph and isVisitedPatch
-		currPatchGraph.netlist.push_back(it->first);
-		isVisitedPatch[it->first] = false;
-		//find PI
 		for (int i = 0; i < it->first->fanin.size(); ++i) {
 			Node* faninNode = it->first->fanin[i];
-			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end()) {
-				if (faninNode->name == "1'b0")
-					currPatchGraph.Constants[0] = faninNode;
-				else if (faninNode->name == "1'b1")
-					currPatchGraph.Constants[1] = faninNode;
-				else {
-					currPatchGraph.PI.push_back(faninNode);
-					currPatchGraph.PIMAP[faninNode->name] = faninNode;
-					currPatchGraph.PIFanoutNode.insert(it->first);
-				}
-			}
-		}
-		//find PO
-		if (it->first->fanout.size() == 0)
-			currPatchGraph.PO.push_back(it->first);
-		else {
-			for (int i = 0; i < it->first->fanout.size(); ++i) {
-				Node* fanoutNode = it->first->fanout[i];
-				if (matchInfo.goldenRemoveNode.find(fanoutNode) == matchInfo.goldenRemoveNode.end()) {
-					currPatchGraph.PO.push_back(it->first);
-					break;
-				}
-			}
+			if (matchInfo.goldenRemoveNode.find(faninNode) == matchInfo.goldenRemoveNode.end())
+				currPatch.PI.push_back(faninNode);
 		}
 	}
+
 	//output blif
 	outputPatchBlif(currPatchGraph, isVisitedPatch);
 
@@ -2129,49 +2203,6 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 	ofstream outfile("./blif/check.blif");
 	//write -> ".model check"
 	outfile << ".model check" << endl;
-
-	//write -> ".inputs ..."
-	outfile << ".inputs";
-	map<string, Node*>::iterator it1 = currPatchGraph.PIMAP.begin();
-	for (; it1 != currPatchGraph.PIMAP.end(); ++it1) {
-		outfile << " " << it1->first;
-		if (it1->second->type != 9)
-			outfile << "_patch";
-	}
-	outfile << endl;
-
-	//write -> ".outputs ..."
-	outfile << ".outputs";
-	for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
-		outfile << " " << currPatchGraph.PO[i]->name << "_patch";
-	}
-	outfile << endl;
-
-	//output PI nodes
-	set<Node*>::iterator it = currPatchGraph.PIFanoutNode.begin();
-	for (; it != currPatchGraph.PIFanoutNode.end(); ++it) {
-		Node* fanoutNode = *it;
-		if (!isVisitedPatch[fanoutNode]) {
-			outputDotNames(outfile, fanoutNode, "patch");
-			isVisitedPatch[fanoutNode] = true;
-		}
-	}
-
-	//output Constants
-	vector<bool> existConst(2, false);
-	for (int i = 0; i < currPatchGraph.Constants.size(); ++i) {
-		if (currPatchGraph.Constants[i] != NULL)
-			existConst[i] = true;
-	}
-	outputConst(outfile, existConst);
-
-	//output netlist
-	for (int i = 0; i < currPatchGraph.netlist.size(); ++i) {
-		Node* currNode = currPatchGraph.netlist[i];
-		if (!isVisitedPatch[currPatchGraph.netlist[i]])
-			outputDotNames(outfile, currNode, "patch");
-	}
-
 	outfile << ".end";
 }
 
@@ -2491,5 +2522,6 @@ int selectBlifGateType(ifstream& infile)
 	//error gate type
 	cout << "Patch Ocurr Error Gate Type!" << endl;
 	return -1;
+
 }
 
