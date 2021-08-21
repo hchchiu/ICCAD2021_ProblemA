@@ -225,6 +225,10 @@ void removeRedundantFanin(Node* redundantNode, Node* newNode);
 void removeRedundantFanout(Node* faninNode, set<Node*>& redundantNode);
 //solve the problem of old node in the fanin node's fanout
 void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<Node*, bool>& oldGoldenRemoveNode);
+//call the abc to optimize patch
+void optimizePatch();
+//check if fanin already inside the fanout Node's fanin
+bool faninAlreadyInside(Node* faninNode, Node* fanoutNode);
 
 
 
@@ -353,7 +357,7 @@ int main(int argc, char* argv[])
 			cout << "264---\n";
 	}*/
 
-	randomSimulation(matchInfo);
+	//randomSimulation(matchInfo);
 	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
 		if (it->first->name == "n_505")
 			cout << "505***\n";
@@ -362,13 +366,15 @@ int main(int argc, char* argv[])
 	}*/
 	//cout << "after random\n";
 
+	/*start optimize*/
+
 	backStructureComapre(G1, R2, matchInfo);
 	//cout << "after back\n";
 	//start create and verify patch
 	//patchVerify(matchInfo, R2, G1);
 
 	//start optimize patch with abc tool
-	//patchOptimize(matchInfo);
+	patchOptimize(matchInfo);
 
 	//output the patch.v
 	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
@@ -1235,9 +1241,9 @@ void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 
 	outfile << ".names";
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
-		if (currNode->fanin[i]->graphName == currGraphName) {
+		if (currNode->fanin[i]->graphName == currGraphName || currGraphName == "patch") {
 			outfile << " " << currNode->fanin[i]->name;
-			if (currNode->fanin[i]->type != 9)
+			if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1")
 				outfile << "_" + currGraphName;
 		}
 	}
@@ -2213,17 +2219,29 @@ void patchOptimize(MatchInfo& matchInfo)
 	}
 	//output blif
 	outputPatchBlif(currPatchGraph, isVisitedPatch);
+	cout << "Success outputPatchBlif!" << endl;
+
+	//optimize the patch
+	optimizePatch();
+	cout << "Success optimize the patch!" << endl;
 
 	//read optimized patch blif and transfer into goldenRemoveNode
 	map<Node*, bool> newGoldenRemoveNode;
 	readOptPatchBlif(currPatchGraph, newGoldenRemoveNode);
+	cout << "Success read the New patch!" << endl;
 
 	//combine split gate into xor or xnor gate
+	/**/
 	removeRedundantNode(newGoldenRemoveNode);
+	cout << "Success removeRedundantNode!" << endl;
+	
 
 	//remove old R2 node
 	removeOldNode(currPatchGraph, newGoldenRemoveNode, matchInfo.goldenRemoveNode);
+	cout << "Success removeOldNode!" << endl;
+	
 
+	//assign new goldenRemoveNode
 	matchInfo.goldenRemoveNode = newGoldenRemoveNode;
 }
 
@@ -2232,6 +2250,49 @@ void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch)
 	ofstream outfile("./blif/check.blif");
 	//write -> ".model check"
 	outfile << ".model check" << endl;
+
+	//write -> ".inputs ..."
+	outfile << ".inputs";
+	map<string, Node*>::iterator it1 = currPatchGraph.PIMAP.begin();
+	for (; it1 != currPatchGraph.PIMAP.end(); ++it1) {
+		outfile << " " << it1->first;
+		if (it1->second->type != 9)
+			outfile << "_patch";
+	}
+	outfile << endl;
+
+	//write -> ".outputs ..."
+	outfile << ".outputs";
+	for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
+		outfile << " " << currPatchGraph.PO[i]->name << "_patch";
+	}
+	outfile << endl;
+
+	//output PI nodes
+	set<Node*>::iterator it = currPatchGraph.PIFanoutNode.begin();
+	for (; it != currPatchGraph.PIFanoutNode.end(); ++it) {
+		Node* fanoutNode = *it;
+		if (!isVisitedPatch[fanoutNode]) {
+			outputDotNames(outfile, fanoutNode, "patch");
+			isVisitedPatch[fanoutNode] = true;
+		}
+	}
+
+	//output Constants
+	vector<bool> existConst(2, false);
+	for (int i = 0; i < currPatchGraph.Constants.size(); ++i) {
+		if (currPatchGraph.Constants[i] != NULL)
+			existConst[i] = true;
+	}
+	outputConst(outfile, existConst);
+
+	//output netlist
+	for (int i = 0; i < currPatchGraph.netlist.size(); ++i) {
+		Node* currNode = currPatchGraph.netlist[i];
+		if (!isVisitedPatch[currPatchGraph.netlist[i]])
+			outputDotNames(outfile, currNode, "patch");
+	}
+
 	outfile << ".end";
 }
 
@@ -2264,7 +2325,7 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 	stringstream ss;
 	vector<Node*> NodeList;
 	vector<string> NodeListString;
-
+	bool existPO; //check if this Node is PO
 	//record whether this node is fanin or fanout node
 	ss << line;
 	//split blif file command and save into vector
@@ -2295,20 +2356,25 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 			continue;
 		}
 		else {
-			int exist = false;
+			existPO = false;
 			for (int i = 0; i < currPatchGraph.PO.size(); ++i) {
 				if (currPatchGraph.PO[i]->name == new_line && gatePos == NodeListString.size() - 1) {
-					exist = true;
+					existPO = true;
 					//get the new type
-					currPatchGraph.PO[i]->realGate = selectBlifGateType(infile);
+					if(currPatchGraph.PO[i]->type == 10)
+						currPatchGraph.PO[i]->realGate = selectBlifGateType(infile);
+					else
+						currPatchGraph.PO[i]->type = selectBlifGateType(infile);
 					//push into new GoldenRemoveNode
 					newGoldenRemoveNode[currPatchGraph.PO[i]] = false;
+					checkExist[new_line] = currPatchGraph.PO[i];
+					currPatchGraph.PO[i]->fanin.resize(0);
 					NodeList.push_back(currPatchGraph.PO[i]);
 					break;
 				}
 			}
 			//this node is PO
-			if (exist)
+			if (existPO)
 				continue;
 		}
 
@@ -2336,10 +2402,17 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 		//currGate fanin Node
 		Node* faninNode = NodeList[i];
 
+		//if this node fanin is PI and fanout is PO
+		//check whether fanin Node has already been in fanout Node's fanin
+		/*if (currPatchGraph.PIMAP.find(faninNode->name) != currPatchGraph.PIMAP.end() && existPO) {
+			if (faninAlreadyInside(faninNode, fanoutNode))
+				continue;
+		}*/
+
 		//fix the problem of blif file case(ex:10 1,01 1,10 0,01 0)
-		if ((fanoutNode->type == 210 || fanoutNode->type == 101) && i == 0) //10 1
+		if ((fanoutNode->type == 210 || fanoutNode->realGate == 210 || fanoutNode->type == 101 || fanoutNode->realGate == 101) && i == 0) //10 1
 			faninNode = connectNewNotGate(faninNode, notGateName, notGatePos, newGoldenRemoveNode);
-		else if ((fanoutNode->type == 201 || fanoutNode->type == 110) && i == 1)//01 1
+		else if ((fanoutNode->type == 201 || fanoutNode->realGate == 201 || fanoutNode->type == 110 || fanoutNode->realGate == 110) && i == 1)//01 1
 			faninNode = connectNewNotGate(faninNode, notGateName, notGatePos, newGoldenRemoveNode);
 
 		//push into fanin and fanout
@@ -2347,14 +2420,24 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 		fanoutNode->fanin.push_back(faninNode);
 	}
 	//transfer special gate type into primitive gate type
-	if (fanoutNode->type == 101 || fanoutNode->type == 110)//and gate 
-		fanoutNode->type = 1;
-	else if (fanoutNode->type == 201 || fanoutNode->type == 210)//or gate
-		fanoutNode->type = 2;
+	if (fanoutNode->type == 101 || fanoutNode->type == 110 ||
+		fanoutNode->realGate == 101 || fanoutNode->realGate == 110) {//and gate
+		if(fanoutNode -> type == 10)
+			fanoutNode->realGate = 1;
+		else
+			fanoutNode->type = 1;
+	}
+	else if (fanoutNode->type == 201 || fanoutNode->type == 210 ||
+		fanoutNode->realGate == 201 || fanoutNode->realGate == 210) {//or gate
+		if (fanoutNode->type == 10)
+			fanoutNode->realGate = 2;
+		else
+			fanoutNode->type = 2;
+	}
 	else if (fanoutNode->type == 80 || fanoutNode->type == 81 ||
 		fanoutNode->realGate == 80 || fanoutNode->realGate == 81) { //assign constant 0 or 1
 		Node* newConstNode;
-		if (fanoutNode->type == 80)
+		if (fanoutNode->type == 80 || fanoutNode->realGate == 80)
 			newConstNode = initialNewnode("1'b0", -1, "patch");
 		else
 			newConstNode = initialNewnode("1'b1", -1, "patch");
@@ -2467,7 +2550,7 @@ void startRebuildNode(Node* fanoutNode, set<Node*>& redundantFaninNode, set<Node
 		(*it)->fanout.push_back(newNode);
 		removeRedundantFanout(*it, redundantNode);
 	}
-	// erase redundant node in newGoldenRemoveNode 
+	//erase redundant node in newGoldenRemoveNode 
 	it = redundantNode.begin();
 	for (; it != redundantNode.end(); ++it)
 		if (newGoldenRemoveNode.find(*it) != newGoldenRemoveNode.end())
@@ -2499,8 +2582,10 @@ void removeRedundantFanout(Node* faninNode, set<Node*>& redundantNode)
 	for (int i = 0; i < faninNode->fanout.size(); ++i) {
 		Node* fanoutNode = faninNode->fanout[i];
 		//remove redundant faninNode
-		if (redundantNode.find(fanoutNode) != redundantNode.end())
+		if (redundantNode.find(fanoutNode) != redundantNode.end()) {
 			faninNode->fanout.erase(faninNode->fanout.begin() + i);
+			i--;
+		}
 	}
 }
 void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<Node*, bool>& oldGoldenRemoveNode)
@@ -2529,7 +2614,18 @@ void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, 
 		}
 	}
 }
-
+void optimizePatch()
+{
+	system("./optimize.out ./blif/check.blif");
+}
+bool faninAlreadyInside(Node* faninNode,Node* fanoutNode)
+{
+	for (int i = 0; i < fanoutNode->fanin.size(); ++i) {
+		if (fanoutNode->fanin[i] == faninNode)
+			return true;
+	}
+	return false;
+}
 int selectBlifGateType(ifstream& infile)
 {
 	string gateTypeLine;
@@ -2541,7 +2637,8 @@ int selectBlifGateType(ifstream& infile)
 	else if (gateTypeLine == "11 0") return 3;// nand
 	else if (gateTypeLine == "00 1") return 4;// nor
 	else if (gateTypeLine == "1 1") return 8;// assign and buffer
-	else if (gateTypeLine == " 0") return 80;// assgin constant 0
+	else if (gateTypeLine == " 0") 
+		return 80;// assgin constant 0
 	else if (gateTypeLine == " 1") return 81;// assgin constant 1
 	else if (gateTypeLine == "10 1") return 110; // and (ab')
 	else if (gateTypeLine == "01 1") return 101; // and (a'b)
