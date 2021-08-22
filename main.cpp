@@ -296,7 +296,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
 */
 
 
-int nWords = 10;
+int nWords = 1;
 // inpurt format
 //./eco R1.v R2.v G1.v patch.v 
 int main(int argc, char* argv[])
@@ -1076,7 +1076,7 @@ void randomSimulation(MatchInfo& matchInfo)
 							//removeAllFanin(matchInfo, og_it->first, gd_it->first);
 							//og_it = matchInfo.originRemoveNode.begin();
 							//findSameNode = true;
-							break;
+							//break;
 						}
 					}
 				}
@@ -1088,11 +1088,11 @@ void randomSimulation(MatchInfo& matchInfo)
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
 	}
+
 	map<Node*, Node*>::iterator it =  removeMAP.begin();
 	for (; it != removeMAP.end(); ++it) {
 		removeAllFanin(matchInfo, it->second, it->first);
 	}
-
 }
 
 void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSameNode)
@@ -2646,8 +2646,7 @@ int selectBlifGateType(ifstream& infile)
 	else if (gateTypeLine == "11 0") return 3;// nand
 	else if (gateTypeLine == "00 1") return 4;// nor
 	else if (gateTypeLine == "1 1") return 8;// assign and buffer
-	else if (gateTypeLine == " 0") 
-		return 80;// assgin constant 0
+	else if (gateTypeLine == " 0") return 80;// assgin constant 0
 	else if (gateTypeLine == " 1") return 81;// assgin constant 1
 	else if (gateTypeLine == "10 1") return 110; // and (ab')
 	else if (gateTypeLine == "01 1") return 101; // and (a'b)
