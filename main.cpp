@@ -296,7 +296,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
 */
 
 
-int nWords = 1;
+int nWords = 10;
 // inpurt format
 //./eco R1.v R2.v G1.v patch.v 
 int main(int argc, char* argv[])
@@ -370,11 +370,13 @@ int main(int argc, char* argv[])
 
 	backStructureComapre(G1, R2, matchInfo);
 	//cout << "after back\n";
+	 
 	//start create and verify patch
 	//patchVerify(matchInfo, R2, G1);
 
 	//start optimize patch with abc tool
 	patchOptimize(matchInfo);
+
 
 	//output the patch.v
 	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
@@ -1055,10 +1057,11 @@ void randomSimulation(MatchInfo& matchInfo)
 {
 	map<Node*, bool>::iterator gd_it = matchInfo.goldenRemoveNode.begin();
 	map<Node*, bool>::iterator og_it = matchInfo.originRemoveNode.begin();
+	map<Node*, Node*> removeMAP;
 	bool findSameNode = false;
 	for (; og_it != matchInfo.originRemoveNode.end();) {
-		gd_it = matchInfo.goldenRemoveNode.begin();
 		findSameNode = false;
+		gd_it = matchInfo.goldenRemoveNode.begin();
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
@@ -1069,9 +1072,10 @@ void randomSimulation(MatchInfo& matchInfo)
 						if (SATsolver()) {
 							//cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
-							removeAllFanin(matchInfo, og_it->first, gd_it->first);
-							og_it = matchInfo.originRemoveNode.begin();
-							findSameNode = true;
+							removeMAP[gd_it->first] = og_it->first;
+							//removeAllFanin(matchInfo, og_it->first, gd_it->first);
+							//og_it = matchInfo.originRemoveNode.begin();
+							//findSameNode = true;
 							break;
 						}
 					}
@@ -1084,6 +1088,11 @@ void randomSimulation(MatchInfo& matchInfo)
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
 	}
+	map<Node*, Node*>::iterator it =  removeMAP.begin();
+	for (; it != removeMAP.end(); ++it) {
+		removeAllFanin(matchInfo, it->second, it->first);
+	}
+
 }
 
 void removeAllFanin(MatchInfo& matchInfo, Node* originalSameNode, Node* goldenSameNode)
