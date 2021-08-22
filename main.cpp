@@ -357,7 +357,7 @@ int main(int argc, char* argv[])
 			cout << "264---\n";
 	}*/
 
-	//randomSimulation(matchInfo);
+	randomSimulation(matchInfo);
 	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
 		if (it->first->name == "n_505")
 			cout << "505***\n";
@@ -2205,7 +2205,7 @@ void patchOptimize(MatchInfo& matchInfo)
 			}
 		}
 		//find PO
-		if (it->first->fanout.size() == 0)
+		if (it->first->fanout.size() == 0 || it->first->type == 10)
 			currPatchGraph.PO.push_back(it->first);
 		else {
 			for (int i = 0; i < it->first->fanout.size(); ++i) {
