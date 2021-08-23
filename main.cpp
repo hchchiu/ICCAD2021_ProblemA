@@ -1,4 +1,4 @@
-#include<iostream>
+﻿#include<iostream>
 #include<fstream>
 #include<sstream>
 #include<time.h>
@@ -370,7 +370,7 @@ int main(int argc, char* argv[])
 
 	backStructureComapre(G1, R2, matchInfo);
 	//cout << "after back\n";
-	 
+
 	//start create and verify patch
 	//patchVerify(matchInfo, R2, G1);
 
@@ -431,7 +431,8 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 	//solve "assign" type special conversion
 	if (verilog_command.find("assign") != string::npos || verilog_command.find("ASSIGN") != string::npos)
 		assignCommandTransform(verilog_command);
-
+	/*if (verilog_command.find("buf") != string::npos)
+		int i = 0;*/
 	int type, count = 1;
 	string split_command;
 	Node* currGate = NULL;
@@ -835,6 +836,8 @@ void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
 		bool ending = false;
 		Node* originPtr = matchInfo.originNode[originIndex];
 		Node* goldenPtr = matchInfo.goldenNode[goldenIndex];
+		/*if (goldenPtr->name == "overflow")
+			cout << "point";*/
 		while (matchInfo.originState.find(originPtr) != matchInfo.originState.end() && matchInfo.originState[originPtr] == false) {
 			matchInfo.originNode.erase(matchInfo.originNode.begin() + originIndex);
 			if (originIndex < matchInfo.originNode.size())
@@ -884,38 +887,38 @@ void structureCompareMain(Graph origin, Graph golden, MatchInfo& matchInfo)
 			break;
 		}
 	}
-	set<Node*>::iterator req = matchInfo.originSupprotSet.begin();
-	for (set<Node*>::iterator it = matchInfo.originSupprotSet.begin(); it != matchInfo.originSupprotSet.end(); it = req) {
-		++req;
-		bool updates = true;
-		Node* accesses = *it;
-		for (int m = 0; m < accesses->fanout.size(); m++)
-			if (matchInfo.originRemoveNode.find(accesses->fanout[m]) != matchInfo.originRemoveNode.end()) {
-				updates = false;
-				break;
-			}
-		if (updates) {
-			for (int m = 0; m < accesses->fanout.size(); m++)
-				matchInfo.originSupprotSet.insert(accesses->fanout[m]);
-			matchInfo.originSupprotSet.erase(it);
-		}
-	}
-	req = matchInfo.goldenSupprotSet.begin();
-	for (set<Node*>::iterator it = matchInfo.goldenSupprotSet.begin(); it != matchInfo.goldenSupprotSet.end(); it = req) {
-		++req;
-		bool updates = true;
-		Node* accesses = *it;
-		for (int m = 0; m < accesses->fanout.size(); m++)
-			if (matchInfo.matches.find(accesses->fanout[m]) == matchInfo.matches.end()) {
-				updates = false;
-				break;
-			}
-		if (updates) {
-			for (int m = 0; m < accesses->fanout.size(); m++)
-				matchInfo.goldenSupprotSet.insert(accesses->fanout[m]);
-			matchInfo.goldenSupprotSet.erase(it);
-		}
-	}
+	//set<Node*>::iterator req = matchInfo.originSupprotSet.begin();
+	//for (set<Node*>::iterator it = matchInfo.originSupprotSet.begin(); it != matchInfo.originSupprotSet.end(); it = req) {
+	//	++req;
+	//	bool updates = true;
+	//	Node* accesses = *it;
+	//	for (int m = 0; m < accesses->fanout.size(); m++)
+	//		if (matchInfo.originRemoveNode.find(accesses->fanout[m]) != matchInfo.originRemoveNode.end()) {
+	//			updates = false;
+	//			break;
+	//		}
+	//	if (updates) {
+	//		for (int m = 0; m < accesses->fanout.size(); m++)
+	//			matchInfo.originSupprotSet.insert(accesses->fanout[m]);
+	//		matchInfo.originSupprotSet.erase(it);
+	//	}
+	//}
+	//req = matchInfo.goldenSupprotSet.begin();
+	//for (set<Node*>::iterator it = matchInfo.goldenSupprotSet.begin(); it != matchInfo.goldenSupprotSet.end(); it = req) {
+	//	++req;
+	//	bool updates = true;
+	//	Node* accesses = *it;
+	//	for (int m = 0; m < accesses->fanout.size(); m++)
+	//		if (matchInfo.matches.find(accesses->fanout[m]) == matchInfo.matches.end()) {
+	//			updates = false;
+	//			break;
+	//		}
+	//	if (updates) {
+	//		for (int m = 0; m < accesses->fanout.size(); m++)
+	//			matchInfo.goldenSupprotSet.insert(accesses->fanout[m]);
+	//		matchInfo.goldenSupprotSet.erase(it);
+	//	}
+	//}
 	/*for (int i = 0; i < matchInfo.originSupprotSet.size(); i++) {
 		Node* ptr = matchInfo.originSupprotSet[i];
 		bool updates = true;
@@ -1088,6 +1091,7 @@ void randomSimulation(MatchInfo& matchInfo)
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
 	}
+
 
 	map<Node*, Node*>::iterator it =  removeMAP.begin();
 	for (; it != removeMAP.end(); ++it) {
@@ -1857,19 +1861,19 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 	outfile << ");\n";
 	//cout << "after output\n";
 	// input.... output....  wire....
-	cout << totalCost << "\n";
+	//cout << totalCost << "\n";
 	generateDeclare(inputDeclareMap, "input", outfile, totalCost);
-	cout << totalCost << "\n";
+	//cout << totalCost << "\n";
 	generateDeclare(outputDeclareMap, "output", outfile, totalCost);
-	cout << totalCost << "\n";
+	//cout << totalCost << "\n";
 	generateDeclare(newGateMap, "wire", outfile, totalCost);
-	cout << totalCost << "\n";
+	//cout << totalCost << "\n";
 
 	// and or not....
 	for (int i = 0; i < instructionSet.size(); i++)
 		outfile << instructionSet[i] << "\n";
 	outfile << "endmodule\n";
-	cout << "// cost:" << totalCost << "\n";
+	cout << "Success cost:" << totalCost << "\n";
 }
 
 string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
@@ -1881,15 +1885,15 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 	if (gate == "PO")
 		gate = getTypeString(node->realGate);
 
-	if (gate == "not" || gate == "buf") {
+	if (gate == "not" || gate == "buf" || gate == "assign") {
+		if (gate == "assign")
+			gate = "buf";
 		if (names[0].find("\\") == string::npos)
 			res += gate + " eco" + ss.str() + " (" + names[2] + ", " + names[0] + ");";
 		else
 			res += gate + " eco" + ss.str() + " (" + names[2] + "," + names[0] + ");";
 		cost += -1;
 	}
-	else if (gate == "assign")
-		res += gate + " " + names[2] + " = " + names[0] + ";";
 	else {
 		string loc1 = ", ";
 		string loc2 = ", ";
@@ -1899,6 +1903,8 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 			loc2 = ",";
 		res += gate + " eco" + ss.str() + " (" + names[2] + loc1 + names[0] + loc2 + names[1] + ");";
 	}
+	//else if (gate == "assign")
+	//	res += gate + " " + names[2] + " = " + names[0] + ";";
 	return res;
 }
 
@@ -1962,7 +1968,6 @@ void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, i
 	}
 }
 
-
 string generatePatchFormat(Node* node)
 {
 	string name = node->name;
@@ -1972,7 +1977,7 @@ string generatePatchFormat(Node* node)
 		if (name.find("[") != string::npos)
 			name = "\\" + name + " ";
 	}
-	else if (node->graphName == "R2") {
+	else if (node->graphName == "R2" || node->graphName == "patch") {
 		if (node->type == 10) { //is PO reprent it need to be using G1's PO
 			if (name.find("[") != string::npos)
 				name = "\\" + name + " ";
@@ -1981,10 +1986,10 @@ string generatePatchFormat(Node* node)
 			if (name.find("[") != string::npos) {  // in R2 represent it need to be add new gate
 				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
 				name = name.substr(0, name.find("[")) + req;
-				name = "patchNew_" + name;
+				name = "patchNew_"  + name;
 			}
 			else
-				name = "patchNew_" + name;
+				name = "patchNew_"  + name;
 		}
 
 	}
@@ -2014,7 +2019,7 @@ void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* no
 		newGateMap[node] = name;
 }
 
-void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string> &newGateMap)
+void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string>& newGateMap)
 {
 	name = generatePatchFormat(node);
 	if (newGateMap.find(node) == newGateMap.end()) {
@@ -2243,12 +2248,11 @@ void patchOptimize(MatchInfo& matchInfo)
 	/**/
 	removeRedundantNode(newGoldenRemoveNode);
 	cout << "Success removeRedundantNode!" << endl;
-	
+
 
 	//remove old R2 node
 	removeOldNode(currPatchGraph, newGoldenRemoveNode, matchInfo.goldenRemoveNode);
 	cout << "Success removeOldNode!" << endl;
-	
 
 	//assign new goldenRemoveNode
 	matchInfo.goldenRemoveNode = newGoldenRemoveNode;
@@ -2370,7 +2374,8 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 				if (currPatchGraph.PO[i]->name == new_line && gatePos == NodeListString.size() - 1) {
 					existPO = true;
 					//get the new type
-					if(currPatchGraph.PO[i]->type == 10)
+
+					if (currPatchGraph.PO[i]->type == 10)
 						currPatchGraph.PO[i]->realGate = selectBlifGateType(infile);
 					else
 						currPatchGraph.PO[i]->type = selectBlifGateType(infile);
@@ -2431,7 +2436,8 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 	//transfer special gate type into primitive gate type
 	if (fanoutNode->type == 101 || fanoutNode->type == 110 ||
 		fanoutNode->realGate == 101 || fanoutNode->realGate == 110) {//and gate
-		if(fanoutNode -> type == 10)
+
+		if (fanoutNode->type == 10)
 			fanoutNode->realGate = 1;
 		else
 			fanoutNode->type = 1;
@@ -2617,7 +2623,7 @@ void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, 
 			Node* faninNode = POnode->fanin[j];
 			if ((newGoldenRemoveNode.find(faninNode) == newGoldenRemoveNode.end()) &&
 				oldGoldenRemoveNode.find(faninNode) != oldGoldenRemoveNode.end()) {
-				POnode->fanin.erase(POnode->fanin.begin()+j);
+				POnode->fanin.erase(POnode->fanin.begin() + j);
 				j--;
 			}
 		}
@@ -2627,7 +2633,8 @@ void optimizePatch()
 {
 	system("./optimize.out ./blif/check.blif");
 }
-bool faninAlreadyInside(Node* faninNode,Node* fanoutNode)
+
+bool faninAlreadyInside(Node* faninNode, Node* fanoutNode)
 {
 	for (int i = 0; i < fanoutNode->fanin.size(); ++i) {
 		if (fanoutNode->fanin[i] == faninNode)
