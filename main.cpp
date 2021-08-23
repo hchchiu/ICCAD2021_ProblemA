@@ -82,7 +82,7 @@ int selectGateType(string gate);
 
 
 //run topological sort
-void topologicalSort(Graph& graph, int idStart);
+void topologicalSort(Graph& graph, int& idStart);
 //topological sort recursive
 void topologicalSortUtil(Graph& graph, Node* node, map<Node*, bool>& visited, stack<Node*>& Stack);
 //Set every node piset and bitwise operation seed
@@ -297,6 +297,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
 
 
 int nWords = 1;
+int nodeID = 1;
 // inpurt format
 //./eco R1.v R2.v G1.v patch.v 
 int main(int argc, char* argv[])
@@ -328,9 +329,9 @@ int main(int argc, char* argv[])
 
 	////Start topological sort
 	//In order to set ID and PI
-	topologicalSort(R1, 1);
-	topologicalSort(R2, R1.netlist.size() + 1);
-	topologicalSort(G1, R2.netlist.size() + R1.netlist.size() + 1);
+	topologicalSort(R1, nodeID);
+	topologicalSort(R2, nodeID);
+	topologicalSort(G1, nodeID);
 
 	//Set all nodes Primary Input
 	setNodePIsetandSeed(R1);
@@ -682,7 +683,7 @@ void setRandomSeed(Graph& R1, Graph& R2, Graph& G1)
 	}
 }
 
-void topologicalSort(Graph& graph, int idStart)
+void topologicalSort(Graph& graph, int& idStart)
 {
 	stack<Node*> Stack;
 	map<Node*, bool> visited;
@@ -715,7 +716,8 @@ void topologicalSort(Graph& graph, int idStart)
 	sortNode.resize(Stack.size());
 	while (Stack.empty() == false) {
 		//cout << Stack.top() << " ";
-		Stack.top()->id = pos + idStart;
+		//Stack.top()->id = pos + idStart;
+		Stack.top()->id = idStart++;
 		sortNode[pos++] = Stack.top();
 		Stack.pop();
 	}
@@ -2402,6 +2404,8 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 			GataType = -1;
 		//create new node and push into NodeList
 		Node* newNode = initialNewnode(new_line, GataType, "patch");
+		//give this node specific id number
+		newNode->id = nodeID++;
 		NodeList.push_back(newNode);
 		//push into new GoldenRemoveNode
 		newGoldenRemoveNode[newNode] = false;
