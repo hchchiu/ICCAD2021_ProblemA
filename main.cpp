@@ -1092,7 +1092,8 @@ void randomSimulation(MatchInfo& matchInfo)
 			break;
 	}
 
-	map<Node*, Node*>::iterator it = removeMAP.begin();
+
+	map<Node*, Node*>::iterator it =  removeMAP.begin();
 	for (; it != removeMAP.end(); ++it) {
 		removeAllFanin(matchInfo, it->second, it->first);
 	}
@@ -2253,7 +2254,6 @@ void patchOptimize(MatchInfo& matchInfo)
 	removeOldNode(currPatchGraph, newGoldenRemoveNode, matchInfo.goldenRemoveNode);
 	cout << "Success removeOldNode!" << endl;
 
-
 	//assign new goldenRemoveNode
 	matchInfo.goldenRemoveNode = newGoldenRemoveNode;
 }
@@ -2374,6 +2374,7 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 				if (currPatchGraph.PO[i]->name == new_line && gatePos == NodeListString.size() - 1) {
 					existPO = true;
 					//get the new type
+
 					if (currPatchGraph.PO[i]->type == 10)
 						currPatchGraph.PO[i]->realGate = selectBlifGateType(infile);
 					else
@@ -2435,6 +2436,7 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 	//transfer special gate type into primitive gate type
 	if (fanoutNode->type == 101 || fanoutNode->type == 110 ||
 		fanoutNode->realGate == 101 || fanoutNode->realGate == 110) {//and gate
+
 		if (fanoutNode->type == 10)
 			fanoutNode->realGate = 1;
 		else
@@ -2631,6 +2633,7 @@ void optimizePatch()
 {
 	system("./optimize.out ./blif/check.blif");
 }
+
 bool faninAlreadyInside(Node* faninNode, Node* fanoutNode)
 {
 	for (int i = 0; i < fanoutNode->fanin.size(); ++i) {
