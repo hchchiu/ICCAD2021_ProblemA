@@ -58,6 +58,19 @@ struct MatchInfo
 	map<Node*, Node*> backMatches; //record PO to PI structure match and fanout only one
 };
 
+struct PatchInfo
+{
+	map<Node*, Node*> matches;
+	map<Node*, bool> originMatch;
+	map<Node*, bool> netlist;
+};
+
+struct PatchGraph
+{
+	Graph graph;
+	PatchInfo info;
+};
+
 struct NameCompare
 {
 	bool operator()(const Node* lhs, const Node* rhs) {
@@ -162,7 +175,7 @@ void checkRemoveNodeFaninExist(MatchInfo& matchInfo, Node* currNode, vector<Node
 
 
 // generate patch verilog
-void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv);
+PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv);
 // generate verilog instruction
 string generateInstruction(Node* node, vector<string> names, int eco, int& cost);
 // get type string
@@ -180,7 +193,20 @@ void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* no
 // is randomsimulation remove from goldenremovenode and need to declare this leaking gate
 void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string>& newGateMap);
 
-
+// generate patch PI/PO node and put them in graph
+void generatePatchPIPO(string type, string name, Graph& graph);
+// configure patch name
+void configurePatch(Graph& graph);
+// match name
+void nodeMatch(Graph& patch, Graph& origin, PatchInfo& info);
+// remove extra node
+void removeExtraNode(Graph& patch, Graph& origin, PatchInfo& info);
+// remove all fanin single fanout node
+void removeSingleFanout(Node* node, PatchInfo& info);
+// apply node
+void applyNode(Graph& patch, PatchInfo& info);
+// generate patchG1 graph
+void generatePatchG1(Graph& origin, PatchInfo& info, Graph& patchG1);
 
 //// Output patch
 //void outFile(Graph graph, char* argv);
@@ -380,7 +406,15 @@ int main(int argc, char* argv[])
 
 
 	//output the patch.v
-	generatePatchVerilog(matchInfo, R2, G1, argv[4]);
+	PatchGraph patch;
+	Graph patchG1;
+	patch = generatePatchVerilog(matchInfo, R2, G1, argv[4]);
+	configurePatch(patch.graph);
+	nodeMatch(patch.graph,G1,patch.info);
+	removeExtraNode(patch.graph, G1, patch.info);
+	applyNode(patch.graph, patch.info);
+	generatePatchG1(G1, patch.info, patchG1);
+	int i = 0;
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -453,7 +487,8 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 			split_command = split_command.substr(1, split_command.size() - 1);
 		if (split_command[split_command.size() - 1] == ')') //delete right parentheses
 			split_command = split_command.substr(0, split_command.size() - 1);
-
+		while (split_command[split_command.size() - 1] == ' ') //delete front blank
+			split_command = split_command.substr(0, split_command.size() - 1);
 		// search this whether exist
 		for (int i = 0; i < graph.netlist.size(); i++)
 			if (graph.netlist[i]->name == split_command)
@@ -582,8 +617,10 @@ void PiPoRecord(string str, Graph& graph)
 		cc >> min_index;
 
 		while (getline(ss, split_command, ',')) {
-			if (split_command[0] == ' ') //delete front blank
+			while (split_command[0] == ' ') //delete front blank
 				split_command = split_command.substr(1, split_command.size() - 1);
+			while (split_command[split_command.size() - 1] == ' ') //delete front blank
+				split_command = split_command.substr(0, split_command.size() - 1);
 			for (int i = min_index; i <= max_index; i++) {
 				stringstream ss;
 				ss << i;
@@ -617,6 +654,8 @@ void PiPoRecord(string str, Graph& graph)
 		while (getline(ss, split_command, ',')) {
 			while (split_command[0] == ' ') //delete front blank
 				split_command = split_command.substr(1, split_command.size() - 1);
+			while (split_command[split_command.size() - 1] == ' ') //delete front blank
+				split_command = split_command.substr(0, split_command.size() - 1);
 			Node* req = new Node();
 			req->name = split_command;
 			req->realGate = -1;
@@ -1095,7 +1134,7 @@ void randomSimulation(MatchInfo& matchInfo)
 	}
 
 
-	map<Node*, Node*>::iterator it =  removeMAP.begin();
+	map<Node*, Node*>::iterator it = removeMAP.begin();
 	for (; it != removeMAP.end(); ++it) {
 		removeAllFanin(matchInfo, it->second, it->first);
 	}
@@ -1726,7 +1765,7 @@ bool pisetIsDifferent(Node object, Node golden)
 
 
 
-void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv)
+PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv)
 {
 	ofstream outfile(argv);
 	map<Node*, string> inputDeclareMap; //module(....) input....
@@ -1824,14 +1863,16 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 	}
 	//cout << "after leakingNode\n";
 
-
+	PatchGraph patch;
+	patch.graph.name = "patch";
+	patch.graph.Constants.resize(2);
 	// output file
 	outfile << "module top_eco(";
-
 	// module(input.....)
 	int count = 0;
 	for (map<Node*, string>::iterator it = inputDeclareMap.begin(); it != inputDeclareMap.end(); ++it) {
 		if (count == 0) {
+			generatePatchPIPO("input", it->second, patch.graph);
 			outfile << it->second;
 			count++;
 			continue;
@@ -1842,11 +1883,13 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 			outfile << ", " << it->second;
 		else
 			outfile << "," << it->second;
+		generatePatchPIPO("input", it->second, patch.graph);
 	}
 	//cout << "after input\n";
 
 	// module(output.....)
 	for (map<Node*, string>::iterator it = outputDeclareMap.begin(); it != outputDeclareMap.end(); ++it) {
+		generatePatchPIPO("output", it->second, patch.graph);
 		if (inputDeclareMap.find(it->first) != inputDeclareMap.end())
 			inputDeclareMap.erase(it->first);
 		if (count == 0) {
@@ -1872,10 +1915,16 @@ void generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char* argv
 	//cout << totalCost << "\n";
 
 	// and or not....
-	for (int i = 0; i < instructionSet.size(); i++)
+	vector<Node*> regists;
+	for (int i = 0; i < instructionSet.size(); i++) {
 		outfile << instructionSet[i] << "\n";
+		string command = instructionSet[i].substr(0, instructionSet[i].size() - 1);
+		verilog2graph(command, patch.graph, regists);
+	}
 	outfile << "endmodule\n";
 	cout << "Success cost:" << totalCost << "\n";
+	return patch;
+
 }
 
 string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
@@ -1886,6 +1935,8 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 	ss << eco;
 	if (gate == "PO")
 		gate = getTypeString(node->realGate);
+	if (gate == "error")
+		cout << names[2] << "Error !" << endl;
 
 	if (gate == "not" || gate == "buf" || gate == "assign") {
 		if (gate == "assign")
@@ -1926,42 +1977,43 @@ void generateDeclare(map<Node*, string> maps, string types, ofstream& outfile, i
 	int count = 1;
 	bool first = true;
 	for (map<Node*, string>::iterator it = maps.begin(); it != maps.end(); ++it) {
-		if (first) {
-			outfile << "  " + types + " ";
-			if (last == maps.size()) {
-				outfile << it->second << ";\n";
-			}
-			else {
-				outfile << it->second;
-			}
-			first = false;
-		}
-		else {
-			if (count == 0)
+		if (types != "wire") {
+			if (first) {
 				outfile << "  " + types + " ";
-			if (last == maps.size() || count == 4) {
-				if (count != 0) {
-					if (it->second.find("\\") == string::npos)
-						outfile << ", " << it->second << ";\n";
-					else
-						outfile << "," << it->second << ";\n";
-				}
-				else {
+				if (last == maps.size()) {
 					outfile << it->second << ";\n";
 				}
+				else {
+					outfile << it->second;
+				}
+				first = false;
 			}
 			else {
-				if (count != 0) {
-					if (it->second.find("\\") == string::npos)
-						outfile << ", " << it->second;
-					else
-						outfile << "," << it->second;
+				if (count == 0)
+					outfile << "  " + types + " ";
+				if (last == maps.size() || count == 4) {
+					if (count != 0) {
+						if (it->second.find("\\") == string::npos)
+							outfile << ", " << it->second << ";\n";
+						else
+							outfile << "," << it->second << ";\n";
+					}
+					else {
+						outfile << it->second << ";\n";
+					}
 				}
-				else
-					outfile << it->second;
+				else {
+					if (count != 0) {
+						if (it->second.find("\\") == string::npos)
+							outfile << ", " << it->second;
+						else
+							outfile << "," << it->second;
+					}
+					else
+						outfile << it->second;
+				}
 			}
 		}
-
 		count++;
 		last++;
 		cost += 1;
@@ -1988,10 +2040,10 @@ string generatePatchFormat(Node* node)
 			if (name.find("[") != string::npos) {  // in R2 represent it need to be add new gate
 				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
 				name = name.substr(0, name.find("[")) + req;
-				name = "patchNew_"  + name;
+				name = "patchNew_" + name;
 			}
 			else
-				name = "patchNew_"  + name;
+				name = "patchNew_" + name;
 		}
 
 	}
@@ -2031,7 +2083,184 @@ void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<
 
 }
 
+void generatePatchPIPO(string type, string name, Graph& graph)
+{
+	//if (name.find("\\") != string::npos)
+	//	name = name.substr(1, name.size());
+	while (name[0] == ' ') //delete front blank
+		name = name.substr(1, name.size() - 1);
+	while (name[name.size() - 1] == ' ') //delete back blank
+		name = name.substr(0, name.size() - 1);
+	Node* node;
+	if (type == "input") {
+		node = initialNewnode(name, 9, graph.name);
+		graph.PIMAP[node->name] = node;
+		graph.netlist.push_back(node);
+		graph.PI.push_back(node);
+		node->piset.insert(node);
+		node->piset_str.insert(node->name);
+	}
+	else {
+		node = initialNewnode(name, 10, graph.name);
+		graph.netlist.push_back(node);
+		graph.PO.push_back(node);
+	}
+}
 
+void configurePatch(Graph& graph)
+{
+	for (int i = 0; i < graph.PI.size(); i++) {
+		if (graph.PI[i]->name.find("\\") != string::npos)
+			graph.PI[i]->name = graph.PI[i]->name.substr(1, graph.PI[i]->name.size());
+		/*if(graph.PI[i]->name.find("_in") != string::npos)
+			graph.PI[i]->name = graph.PI[i]->name.substr(0, graph.PI[i]->name.find("_in"));*/
+	}
+	for (int i = 0; i < graph.PO.size(); i++) {
+		if (graph.PO[i]->name.find("\\") != string::npos)
+			graph.PO[i]->name = graph.PO[i]->name.substr(1, graph.PO[i]->name.size());
+	}
+}
+void nodeMatch(Graph& patch, Graph& origin, PatchInfo& info)
+{
+	map<string, Node*> patchMap;
+	map<string, Node*> originMap;
+	for (int i = 0; i < patch.netlist.size(); i++) {
+		patchMap[patch.netlist[i]->name] = patch.netlist[i];
+	}
+	for (int i = 0; i < origin.netlist.size(); i++) {
+		originMap[origin.netlist[i]->name] = origin.netlist[i];
+	}
+	for (map<string, Node*>::iterator it = patchMap.begin(); it != patchMap.end(); ++it) {
+		if (originMap.find(it->first) != originMap.end()) {
+			info.matches[it->second] = originMap.find(it->first)->second;
+			info.originMatch[originMap.find(it->first)->second] = true;
+		}
+		else if (it->first.find("_in") != string::npos) {
+			string req = it->first.substr(0, it->first.find("_in"));
+			if (originMap.find(req) != originMap.end()) {
+				info.matches[it->second] = originMap.find(req)->second;
+				info.originMatch[originMap.find(req)->second] = true;
+			}
+		}
+	}
+}
+void removeExtraNode(Graph& patch, Graph& origin, PatchInfo& info)
+{
+	for (int i = 0; i < origin.netlist.size(); i++)
+		info.netlist[origin.netlist[i]] = true;
+
+	for (int i = 0; i < patch.PO.size(); i++) {
+		if (info.matches.find(patch.PO[i]) != info.matches.end()) {
+			Node* req = info.matches.find(patch.PO[i])->second;
+			removeSingleFanout(req, info);
+			req->fanin.clear();
+		}
+	}
+
+}
+void removeSingleFanout(Node* node, PatchInfo& info)
+{
+	for (int i = 0; i < node->fanin.size(); i++) {
+		if (node->fanin[i]->type == 9 || node->fanin[i]->type == 10)
+			continue;
+		if (info.originMatch.find(node->fanin[i]) != info.originMatch.end())
+			continue;
+		if (node->fanin[i]->fanout.size() == 1) {
+			removeSingleFanout(node->fanin[i], info);
+			info.netlist.erase(node->fanin[i]);
+		}
+		else {
+			int record = 0;
+			for (int j = 0; j < node->fanin[i]->fanout.size(); j++) {
+				if (node->fanin[i]->fanout[j] == node) {
+					record = j;
+					break;
+				}
+			}
+			node->fanin[i]->fanout.erase(node->fanin[i]->fanout.begin() + record);
+		}
+	}
+}
+
+void applyNode(Graph& patch, PatchInfo& info)
+{
+	for (int i = 0; i < patch.netlist.size(); i++) {
+		if (patch.netlist[i]->type == 9)
+			continue;
+		else if (patch.netlist[i]->type == 10) {
+			Node* origin = info.matches.find(patch.netlist[i])->second;
+			origin->fanin.resize(patch.netlist[i]->fanin.size());
+			for (int j = 0; j < patch.netlist[i]->fanin.size(); j++) {
+				Node* patchNode = patch.netlist[i]->fanin[j];
+				if (info.matches.find(patchNode) != info.matches.end()) {
+					origin->fanin[j] = info.matches.find(patchNode)->second;
+					info.matches.find(patchNode)->second->fanout.push_back(origin);
+				}
+				else {
+					Node* newnode = initialNewnode(patchNode->name, patchNode->type, "");
+					info.netlist[newnode] = true;
+					info.matches[patchNode] = newnode;
+					info.originMatch[newnode] = true;
+					origin->fanin[j] = newnode;
+					newnode->fanout.push_back(origin);
+				}
+			}
+			origin->realGate = patch.netlist[i]->realGate;
+		}
+		else {
+			Node* patchNode = patch.netlist[i];
+			Node* originNode;
+			if (info.matches.find(patch.netlist[i]) != info.matches.end())
+				originNode = info.matches.find(patch.netlist[i])->second;
+			else {
+				originNode = initialNewnode(patchNode->name, patchNode->type, "");
+				info.netlist[originNode] = true;
+				info.matches[patchNode] = originNode;
+				info.originMatch[originNode] = true;
+			}
+			originNode->fanin.resize(patchNode->fanin.size());
+			originNode->type = patchNode->type;
+			originNode->realGate = patchNode->realGate;
+			for (int j = 0; j < patchNode->fanin.size(); j++) {
+				if (info.matches.find(patchNode->fanin[j]) != info.matches.end()) {
+					originNode->fanin[j] = info.matches.find(patchNode->fanin[j])->second;
+					info.matches.find(patchNode->fanin[j])->second->fanout.push_back(originNode);
+				}
+				else {
+					Node* newnode = initialNewnode(patchNode->fanin[j]->name, patchNode->fanin[j]->type, "");
+					info.netlist[newnode] = true;
+					info.matches[patchNode->fanin[j]] = newnode;
+					info.originMatch[newnode] = true;
+					originNode->fanin[j] = newnode;
+					newnode->fanout.push_back(originNode);
+				}
+			}
+		}
+	}
+	int k = 0;
+}
+void generatePatchG1(Graph& origin, PatchInfo& info, Graph& patchG1)
+{
+	int cost = 0;
+	vector<Node*> regists;
+	patchG1.name = "patchG1";
+	patchG1.Constants.resize(2);
+	for (int i = 0; i < origin.PI.size(); i++)
+		generatePatchPIPO("input", origin.PI[i]->name, patchG1);
+	for (int i = 0; i < origin.PO.size(); i++) 
+		generatePatchPIPO("output", origin.PO[i]->name, patchG1);
+	for (map<Node*, bool>::iterator it = info.netlist.begin(); it != info.netlist.end(); ++it) {
+		if (it->first->name == "1'b0" || it->first->name == "1'b1" || it->first->type==9)
+			continue;
+		vector<string> names(3);
+		for (int i = 0; i < it->first->fanin.size(); i++)
+			names[i] = it->first->fanin[i]->name;
+		names[2] = it->first->name;
+		string command=generateInstruction(it->first, names, 1, cost);
+		command = command.substr(0, command.size() - 1);
+		verilog2graph(command, patchG1, regists);
+	}
+}
 //void outFile(Graph graph, char* argv)
 //{
 //	ofstream outfile(argv);
