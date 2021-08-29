@@ -397,7 +397,27 @@ int main(int argc, char* argv[])
 	generatePatchG1(G1, patch.info, patchG1);
 	int i = 0;
 
-	
+	/*patchG1 self optimize
+	setRandomSeed(R2, patchG1);
+	topologicalSort(patchG1, nodeID);
+	setNodePIsetandSeed(patchG1);
+	MatchInfo optimizeMatchInfo;
+	set<string> patchNameRecords;
+	for (int i = 0; i < patch.graph.netlist.size(); ++i) {
+		Node* currNode = patch.graph.netlist[i];
+		optimizeMatchInfo.goldenRemoveNode[currNode] = false;
+		patchNameRecords.insert(currNode->name);
+	}
+
+	for (int i = 0; i < patchG1.netlist.size(); ++i) {
+		Node* currNode = patchG1.netlist[i];
+		if (patchNameRecords.find(currNode->name) == patchNameRecords.end())
+			optimizeMatchInfo.originRemoveNode[currNode] = false;
+	}
+	randomSimulation(optimizeMatchInfo);
+	cout << "this is optimize MatchInfo matches size:" << optimizeMatchInfo.matches.size()<<endl;
+	*/
+
 	//start self verify
 	Graph R2dup;
 	loadFile(R2dup, argv[2]);
@@ -405,7 +425,6 @@ int main(int argc, char* argv[])
 		cout << "Patched G1 Self Verify Success!" << endl;
 	else
 		cout << "Patched G1 Self Verify Error!" << endl;
-	/**/
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -1103,7 +1122,7 @@ void randomSimulation(MatchInfo& matchInfo)
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
-							//cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeMAP[gd_it->first] = og_it->first;
 							//removeAllFanin(matchInfo, og_it->first, gd_it->first);
@@ -1121,7 +1140,6 @@ void randomSimulation(MatchInfo& matchInfo)
 		if (matchInfo.originRemoveNode.size() == 0 || matchInfo.goldenRemoveNode.size() == 0)
 			break;
 	}
-
 
 	map<Node*, Node*>::iterator it = removeMAP.begin();
 	for (; it != removeMAP.end(); ++it) {
