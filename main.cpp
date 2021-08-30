@@ -2205,11 +2205,6 @@ void patchOptimize(MatchInfo& matchInfo)
 
 	currPatchGraph.Constants.resize(2);
 	for (; it != matchInfo.goldenRemoveNode.end(); ++it) {
-		if (it->first->name == "n769") {
- 			debug = it->first;
-			cout << "123";
-		}
-
 		//push all golden remove node to currPatchGraph and isVisitedPatch
 		currPatchGraph.netlist.push_back(it->first);
 		isVisitedPatch[it->first] = false;
