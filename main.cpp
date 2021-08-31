@@ -399,7 +399,7 @@ int main(int argc, char* argv[])
 	Graph patchG1;
 	patch = generatePatchVerilog(matchInfo, R2, G1, argv[4]);
 	configurePatch(patch.graph);
-	nodeMatch(patch.graph,G1,patch.info);
+	nodeMatch(patch.graph, G1, patch.info);
 	removeExtraNode(patch.graph, G1, patch.info);
 	applyNode(patch.graph, patch.info);
 	generatePatchG1(G1, patch.info, patchG1);
@@ -1106,8 +1106,8 @@ void randomSimulation(MatchInfo& matchInfo)
 		for (; gd_it != matchInfo.goldenRemoveNode.end(); ++gd_it) {
 			if (!seedIsDifferent(og_it->first, gd_it->first)) {
 				//turn this two gate fanin cone into blif file
-				if (og_it->first->piset.size() == gd_it->first->piset.size() ) {
-					if (og_it->first->piset_str == gd_it->first->piset_str ) {//add this if condition
+				if (og_it->first->piset.size() == gd_it->first->piset.size()) {
+					if (og_it->first->piset_str == gd_it->first->piset_str) {//add this if condition
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
@@ -1180,7 +1180,7 @@ void graph2Blif(Node* originalNode, Node* goldenNode)
 	outputPIwithFaninCone(outfile, goldenNode, internalNode, faninConst);
 	outputConst(outfile, faninConst);
 	netlist2Blif(outfile, internalNode);
-	buildMiter(outfile, originalNode, goldenNode, 0,originalNode->graphName,goldenNode->graphName);
+	buildMiter(outfile, originalNode, goldenNode, 0, originalNode->graphName, goldenNode->graphName);
 
 	outfile << ".names " << "miter_0" << " output" << endl;
 	outfile << "1 1" << endl;
@@ -1278,9 +1278,9 @@ void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 	outfile << ".names";
 	for (int i = 0; i < currNode->fanin.size(); ++i) {
 		//if (currNode->fanin[i]->graphName == currGraphName || currGraphName == "patch" || currGraphName == "patchG1") {
-			outfile << " " << currNode->fanin[i]->name;
-			if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1")
-				outfile << "_" + currGraphName;
+		outfile << " " << currNode->fanin[i]->name;
+		if (currNode->fanin[i]->type != 9 && currNode->fanin[i]->name != "1'b0" && currNode->fanin[i]->name != "1'b1")
+			outfile << "_" + currGraphName;
 		//}
 	}
 
@@ -1338,7 +1338,7 @@ void node2Blif(ofstream& outfile, Node* currNode, int type)
 	}
 }
 
-void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden, int miterPos,string originalGraphName, string goldenGraphName)
+void buildMiter(ofstream& outfile, Node* PO_original, Node* PO_golden, int miterPos, string originalGraphName, string goldenGraphName)
 {
 	/*vector<Node*> PO_goldenTemp = PO_golden;
 	vector<string> miter;
@@ -1580,7 +1580,12 @@ PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char
 		}
 		names[2] = generatePatchFormat(originNode);
 		outputDeclareMap[originNode] = names[2];
-		instructionSet.push_back(generateInstruction(originNode, names, ecoNumber++, totalCost));
+		string instrucs = generateInstruction(originNode, names, ecoNumber++, totalCost);
+		if (instrucs == "error") {
+			cout << "generatePatchVerilog backMatches error!\n";
+			continue;
+		}
+		instructionSet.push_back(instrucs);
 	}
 	//cout << "after po-pi\n";
 	// goldenRemoveNode handler
@@ -1606,7 +1611,12 @@ PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char
 		names[2] = generatePatchFormat(currentNode);
 		if (currentNode->type == 10)
 			outputDeclareMap[currentNode] = names[2];
-		instructionSet.push_back(generateInstruction(currentNode, names, ecoNumber++, totalCost));
+		string instrucs = generateInstruction(currentNode, names, ecoNumber++, totalCost);
+		if (instrucs == "error") {
+			cout << "generatePatchVerilog goldenRemoveNode error!\n";
+			continue;
+		}
+		instructionSet.push_back(instrucs);
 	}
 	//cout << "after goldenRemoveNode\n";
 
@@ -1708,8 +1718,10 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 	ss << eco;
 	if (gate == "PO")
 		gate = getTypeString(node->realGate);
-	if (gate == "error")
-		cout << names[2] << "Error !" << endl;
+	if (gate == "error") {
+		cout << names[2] << "--->" << "generateInstruction Error !" << endl;
+		return "error";
+	}
 
 	if (gate == "not" || gate == "buf" || gate == "assign") {
 		if (gate == "assign")
@@ -2020,16 +2032,20 @@ void generatePatchG1(Graph& origin, PatchInfo& info, Graph& patchG1)
 	patchG1.Constants.resize(2);
 	for (int i = 0; i < origin.PI.size(); i++)
 		generatePatchPIPO("input", origin.PI[i]->name, patchG1);
-	for (int i = 0; i < origin.PO.size(); i++) 
+	for (int i = 0; i < origin.PO.size(); i++)
 		generatePatchPIPO("output", origin.PO[i]->name, patchG1);
 	for (map<Node*, bool>::iterator it = info.netlist.begin(); it != info.netlist.end(); ++it) {
-		if (it->first->name == "1'b0" || it->first->name == "1'b1" || it->first->type==9)
+		if (it->first->name == "1'b0" || it->first->name == "1'b1" || it->first->type == 9)
 			continue;
 		vector<string> names(3);
 		for (int i = 0; i < it->first->fanin.size(); i++)
 			names[i] = it->first->fanin[i]->name;
 		names[2] = it->first->name;
-		string command=generateInstruction(it->first, names, 1, cost);
+		string command = generateInstruction(it->first, names, 1, cost);
+		if (command == "error") {
+			cout << "generatePatchG1 error!!\n";
+			continue;
+		}
 		command = command.substr(0, command.size() - 1);
 		verilog2graph(command, patchG1, regists);
 	}
@@ -2729,7 +2745,7 @@ bool compareNetlist(Graph& R2, Graph& patchedG1)
 
 	//build the miter
 	for (int i = 0; i < R2.PO.size(); ++i) {
-		buildMiter(outfile, patchedG1.PO[i], R2.PO[i], i,"patchG1","R2");
+		buildMiter(outfile, patchedG1.PO[i], R2.PO[i], i, "patchG1", "R2");
 	}
 
 	outfile << ".names";
