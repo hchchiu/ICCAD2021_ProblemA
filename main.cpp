@@ -377,7 +377,7 @@ int main(int argc, char* argv[])
 			cout << "264---\n";
 	}*/
 
-	randomSimulation(matchInfo);
+	//randomSimulation(matchInfo);
 	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
 		if (it->first->name == "n_505")
 			cout << "505***\n";
@@ -522,7 +522,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 					int currtype = currGate->type;
 					if (currtype == 10)
 						currtype = currGate->realGate;
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currtype, graph.name);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name+"_"+toString(nodeID++), currtype, graph.name);
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -561,7 +561,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 					int currtype = currGate->type;
 					if (currtype == 10)
 						currtype = currGate->realGate;
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currtype, graph.name);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name+"_" + toString(nodeID++), currtype, graph.name);
 
 					//modify
 					if (newnode->type == 9 || newnode->type == 10)
@@ -1262,6 +1262,9 @@ void outputConst(ofstream& outfile, vector<bool>& faninConst)
 
 void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 {
+	if (currNode->name == "n1241_n1242")
+		cout << "!!!";
+
 	int type;
 	if (currNode->type == 10 || currNode->type == 9)
 		type = currNode->realGate;
