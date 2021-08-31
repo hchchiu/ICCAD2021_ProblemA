@@ -107,6 +107,7 @@ string toString(int trans) {
 };
 
 int nWords = 1;
+int nodeID = 1;
 int main(int argc, char* argv[])
 {
 	srand(time(NULL));
@@ -247,7 +248,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 					int currtype = currGate->type;
 					if (currtype == 10)
 						currtype = currGate->realGate;
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currtype, graph.name);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name+toString(nodeID++), currtype, graph.name);
 					for (int i = 0; i < n1->fanout.size(); i++)
 						if (n1->fanout[i]->name == currGate->name)
 							n1->fanout[i] = newnode;
@@ -286,7 +287,7 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 					int currtype = currGate->type;
 					if (currtype == 10)
 						currtype = currGate->realGate;
-					Node* newnode = initialNewnode(n1->name + "_" + n2->name, currtype, graph.name);
+					Node* newnode = initialNewnode(n1->name + "_" + n2->name + toString(nodeID++), currtype, graph.name);
 
 					//modify
 					if (newnode->type == 9 || newnode->type == 10)
