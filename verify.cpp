@@ -204,11 +204,11 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 	while (getline(ss, split_command, ',')) {
 		bool isexist = false;
 		Node* scanNode = NULL;
-		while (split_command[0] == ' ') //delete front blank
+		while (split_command[0] == ' ' || split_command[0] == '\n') //delete front blank
 			split_command = split_command.substr(1, split_command.size() - 1);
 		if (split_command[split_command.size() - 1] == ')') //delete right parentheses
 			split_command = split_command.substr(0, split_command.size() - 1);
-		while (split_command[split_command.size() - 1] == ' ') //delete front blank
+		while (split_command[split_command.size() - 1] == ' ' || split_command[split_command.size() - 1] == '\n') //delete front blank
 			split_command = split_command.substr(0, split_command.size() - 1);
 		// search this whether exist
 		for (int i = 0; i < graph.netlist.size(); i++)
