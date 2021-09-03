@@ -2744,7 +2744,7 @@ void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, 
 }
 void optimizePatch()
 {
-	system("./optimize2.out ./blif/check.blif");
+	system("./optimize.out ./blif/check.blif");
 }
 
 int selectBlifGateType(ifstream& infile)
