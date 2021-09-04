@@ -452,7 +452,7 @@ int main(int argc, char* argv[])
 		generatePatchG1(G1, patch.info, patchG1);
 		int i = 0;
 		//make sure the patch is correct
-		if (patchSelfVerify() || m == 0 || true) {
+		if (patchSelfVerify() || m == 0) {
 			cout << "Success output patch version:" << m << endl;
 			break;
 		}
