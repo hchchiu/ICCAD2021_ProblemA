@@ -438,6 +438,7 @@ int main(int argc, char* argv[])
 	}
 	cout <<"eachVersionMatchInfo size : " << eachMatchInfoVersion.size()<<endl;
 
+
 	//output the patch.v
 	for (int m = eachMatchInfoVersion.size()-1;  m >= 0; --m) {
 		PatchGraph patch;
