@@ -1,4 +1,4 @@
-#include<iostream>
+﻿#include<iostream>
 #include<fstream>
 #include<sstream>
 #include<time.h>
@@ -191,9 +191,6 @@ void isInMatchCondition(string& name, map<Node*, Node*> matches, Node* node, map
 void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* node);
 // is randomsimulation remove from goldenremovenode and need to declare this leaking gate
 void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string>& newGateMap);
-// accounting
-PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1);
-
 
 // generate patch PI/PO node and put them in graph
 void generatePatchPIPO(string type, string name, Graph& graph);
@@ -234,14 +231,8 @@ void patchOptimize(MatchInfo& matchInfo);
 void outputPatchBlif(Graph& currPatchGraph, map<Node*, bool>& isVisitedPatch);
 //read optimized patch blif file
 void readOptPatchBlif(Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode);
-//read the patch blif PI
-void readOptPatchPI(ifstream& infile, Graph& currPatchGraph, map<string, string>& patchPI);
-//read the patch blif PO
-void readOptPatchPO(ifstream& infile, Graph& currPatchGraph, map<string, string>& patchPI);
-
 //transfer blif command to graph
-void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode,
-	map<string, Node*>& checkExist, int& notGatePos, map<string, string>& patchPI, map<string, string>& patchPO);
+void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, map<string, Node*>& checkExist, int& notGatePos);
 //return blif file gate type
 int selectBlifGateType(ifstream& infile);
 //solve the proble of blif file (ex:10 1,01 1)
@@ -265,7 +256,7 @@ void optimizePatch();
 
 /*start verify patch*/
 //start verify with minisat
-bool patchSelfVerify();
+bool compareNetlist(Graph& R2, Graph& patchedG1);
 
 
 bool seedIsDifferent(Node* origin, Node* golden);
@@ -331,7 +322,7 @@ bool PONameCompare(Node* lhs, Node* rhs) { return lhs->name > rhs->name; };
 */
 
 
-int nWords = 10;
+int nWords = 1;
 int nodeID = 1;
 //for debug pointer
 Node* debug;
@@ -342,7 +333,6 @@ int main(int argc, char* argv[])
 	srand(time(NULL));
 	//golden netlist
 	Graph R2;
-	vector<MatchInfo> eachMatchInfoVersion;
 	R2.name = "R2";
 	//optimize netlist
 	Graph G1;
@@ -373,11 +363,9 @@ int main(int argc, char* argv[])
 	int currcost;
 	structureCompareMain(G1, R2, matchInfo);
 	cout << "structureCompareMain\n";
-	test = costAccounting(matchInfo, R2, G1);
+	test = generatePatchVerilog(matchInfo, R2, G1, argv[4]);
 	currcost = test.info.cost;
 	int k = 0;
-	//record matchInfo w/ struct compare
-	eachMatchInfoVersion.push_back(matchInfo);
 	/*
 	map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin();
 	int pos = 0;
@@ -394,16 +382,14 @@ int main(int argc, char* argv[])
 		if (it->first->name == "n_264")
 			cout << "264---\n";
 	}*/
-
 	MatchInfo m1 = matchInfo;
 	randomSimulation(m1);
 	cout << "randomSimulation\n";
-	test = costAccounting(m1, R2, G1);
+	test = generatePatchVerilog(m1, R2, G1, argv[4]);
 	cout << test.info.cost << " : " << currcost << "\n";
 	if (test.info.cost <= currcost) {
 		currcost = test.info.cost;
 		matchInfo = m1;
-		eachMatchInfoVersion.push_back(m1);
 	}
 	/*for (map<Node*, bool>::iterator it = matchInfo.goldenRemoveNode.begin(); it != matchInfo.goldenRemoveNode.end(); ++it) {
 		if (it->first->name == "n_505")
@@ -417,49 +403,42 @@ int main(int argc, char* argv[])
 	/*start optimize*/
 	backStructureComapre(G1, R2, m2);
 	cout << "backStructureComapre\n";
-	test = costAccounting(m2, R2, G1);
+	test = generatePatchVerilog(m2, R2, G1, argv[4]);
 	cout << test.info.cost << " : " << currcost << "\n";
 	if (test.info.cost <= currcost) {
 		currcost = test.info.cost;
 		matchInfo = m2;
-		eachMatchInfoVersion.push_back(m2);
 	}
+	//cout << "after back\n";
 
 	MatchInfo m3 = matchInfo;
 	//start optimize patch with abc tool
 	patchOptimize(m3);
 	cout << "patchOptimize\n";
-	test = costAccounting(m3, R2, G1);
+	test = generatePatchVerilog(m3, R2, G1, argv[4]);
 	cout << test.info.cost << " : " << currcost << "\n";
 	if (test.info.cost <= currcost) {
 		currcost = test.info.cost;
 		matchInfo = m3;
-		eachMatchInfoVersion.push_back(m3);
 	}
-	cout <<"eachVersionMatchInfo size : " << eachMatchInfoVersion.size()<<endl;
 
 
 	//output the patch.v
-	for (int m = eachMatchInfoVersion.size()-1;  m >= 0; --m) {
-		PatchGraph patch;
-		Graph patchG1;
-		MatchInfo currMatchInfo = eachMatchInfoVersion[m];
-		patch = generatePatchVerilog(currMatchInfo, R2, G1, argv[4]);
-		configurePatch(patch.graph);
-		nodeMatch(patch.graph, G1, patch.info);
-		removeExtraNode(patch.graph, G1, patch.info);
-		applyNode(patch.graph, patch.info);
-		generatePatchG1(G1, patch.info, patchG1);
-		int i = 0;
-		//make sure the patch is correct
-		if (patchSelfVerify() || m == 0) {
-			cout << "Success output patch version:" << m << endl;
-			break;
-		}
-	}
+	PatchGraph patch;
+	Graph patchG1;
+	patch = generatePatchVerilog(matchInfo, R2, G1, argv[4]);
+	configurePatch(patch.graph);
+	nodeMatch(patch.graph, G1, patch.info);
+	removeExtraNode(patch.graph, G1, patch.info);
+	applyNode(patch.graph, patch.info);
+	generatePatchG1(G1, patch.info, patchG1);
+	int i = 0;
+
 	//start self verify
 	/*
-	if (patchSelfVerify())
+	Graph R2dup;
+	loadFile(R2dup, argv[2]);
+	if (compareNetlist(R2dup, patchG1))
 		cout << "Patched G1 Self Verify Success!" << endl;
 	else
 		cout << "Patched G1 Self Verify Error!" << endl;
@@ -532,11 +511,11 @@ void verilog2graph(string& verilog_command, Graph& graph, vector<Node*>& assign_
 	while (getline(ss, split_command, ',')) {
 		bool isexist = false;
 		Node* scanNode = NULL;
-		while (split_command[0] == ' ' || split_command[0] == '\n') //delete front blank
+		while (split_command[0] == ' ') //delete front blank
 			split_command = split_command.substr(1, split_command.size() - 1);
 		if (split_command[split_command.size() - 1] == ')') //delete right parentheses
 			split_command = split_command.substr(0, split_command.size() - 1);
-		while (split_command[split_command.size() - 1] == ' ' || split_command[split_command.size() - 1] == '\n') //delete front blank
+		while (split_command[split_command.size() - 1] == ' ') //delete front blank
 			split_command = split_command.substr(0, split_command.size() - 1);
 		// search this whether exist
 		for (int i = 0; i < graph.netlist.size(); i++)
@@ -1161,7 +1140,7 @@ void randomSimulation(MatchInfo& matchInfo)
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
-							cout << "Success golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							cout << "golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeMAP[gd_it->first] = og_it->first;
 						}
@@ -1922,137 +1901,6 @@ void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<
 
 }
 
-PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1)
-{
-	cout << "---------costAccounting--------------\n";
-	map<Node*, string> inputDeclareMap; //module(....) input....
-	map<Node*, string> outputDeclareMap; //module(....) output....
-	map<Node*, string> newGateMap; //wire...
-	map<Node*, Node*> matches = matchInfo.matches;
-	map<Node*, Node*> backMatches = matchInfo.backMatches;
-	map<Node*, bool> originRemoveNode = matchInfo.originRemoveNode; //inherit
-	map<Node*, bool> goldenRemoveNode = matchInfo.goldenRemoveNode; //inherit
-	vector<Node*> leakingNodeVec;
-	vector<string> instructionSet; //and(X,X,X)....
-	map<string, bool> useConstant{ {"1'b0",false},{"1'b1",false} }; //check whether using constant
-	int ecoNumber = 1;
-	int totalCost = 0;
-
-	// PO-PI's match handler
-	for (map<Node*, Node*>::iterator it = backMatches.begin(); it != backMatches.end(); ++it) {
-		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
-		Node* originNode = it->second;
-		Node* goldenNode = it->first;
-		//originNode->fanin.clear();
-		//originNode->fanin.resize(goldenNode->fanin.size());
-
-		// fanin node
-		for (int i = 0; i < goldenNode->fanin.size(); i++) {
-			Node* faninNode = goldenNode->fanin[i];
-			if (faninNode->name == "1'b0" || faninNode->name == "1'b1") // is constant
-				isConstantCondition(names[i], useConstant, faninNode, totalCost);
-			else if (matches.find(faninNode) != matches.end())   // in match
-				isInMatchCondition(names[i], matches, faninNode, inputDeclareMap);
-			else if (goldenRemoveNode.find(faninNode) != goldenRemoveNode.end()) // in goldenRemoveNode
-				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
-			else
-				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
-
-			if (names[i] == "") { //have error
-				cout << "PO to PI generate patch Error!\n";
-			}
-		}
-		names[2] = generatePatchFormat(originNode);
-		outputDeclareMap[originNode] = names[2];
-		string instrucs = generateInstruction(originNode, names, ecoNumber++, totalCost);
-		if (instrucs == "error") {
-			cout << "generatePatchVerilog backMatches error!\n";
-			continue;
-		}
-		instructionSet.push_back(instrucs);
-	}
-	//cout << "after po-pi\n";
-	// goldenRemoveNode handler
-	for (map<Node*, bool>::iterator it = goldenRemoveNode.begin(); it != goldenRemoveNode.end(); ++it) {
-		Node* currentNode = it->first;
-		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
-		// fanin node
-		for (int i = 0; i < currentNode->fanin.size(); i++) {
-			Node* faninNode = currentNode->fanin[i];
-			if (faninNode->name == "1'b0" || faninNode->name == "1'b1") // is constant
-				isConstantCondition(names[i], useConstant, faninNode, totalCost);
-			else if (matches.find(faninNode) != matches.end())  // in match
-				isInMatchCondition(names[i], matches, faninNode, inputDeclareMap);
-			else if (goldenRemoveNode.find(faninNode) != goldenRemoveNode.end()) // in goldenRemoveNode
-				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
-			else
-				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
-
-			if (names[i] == "") { //have error
-				cout << "goldenRemoveNode generate patch Error!\n";
-			}
-		}
-		names[2] = generatePatchFormat(currentNode);
-		if (currentNode->type == 10)
-			outputDeclareMap[currentNode] = names[2];
-		string instrucs = generateInstruction(currentNode, names, ecoNumber++, totalCost);
-		if (instrucs == "error") {
-			cout << "generatePatchVerilog goldenRemoveNode error!\n";
-			continue;
-		}
-		instructionSet.push_back(instrucs);
-	}
-	//cout << "after goldenRemoveNode\n";
-
-	//leakingNode handler
-	for (int i = 0; i < leakingNodeVec.size(); i++) {
-		Node* currentNode = leakingNodeVec[i];
-		vector<string> names = { "","","" }; // [0]:fanin1 [1]:fanin2 [2]:node.name
-		// fanin node
-		for (int i = 0; i < currentNode->fanin.size(); i++) {
-			Node* faninNode = currentNode->fanin[i];
-			if (faninNode->name == "1'b0" || faninNode->name == "1'b1") // is constant
-				isConstantCondition(names[i], useConstant, faninNode, totalCost);
-			else if (matches.find(faninNode) != matches.end())  // in match
-				isInMatchCondition(names[i], matches, faninNode, inputDeclareMap);
-			else if (goldenRemoveNode.find(faninNode) != goldenRemoveNode.end()) // in goldenRemoveNode
-				isInGoldenRemoveNode(names[i], newGateMap, faninNode);
-			else
-				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
-
-			if (names[i] == "") { //have error
-				cout << "leakingNode generate patch Error!\n";
-			}
-		}
-		names[2] = generatePatchFormat(currentNode);
-		instructionSet.push_back(generateInstruction(currentNode, names, ecoNumber++, totalCost));
-
-	}
-	//cout << "after leakingNode\n";
-
-	PatchGraph patch;
-	patch.graph.name = "patch";
-	patch.graph.Constants.resize(2);
-	for (map<Node*, string>::iterator it = inputDeclareMap.begin(); it != inputDeclareMap.end(); ++it) {
-		if (outputDeclareMap.find(it->first) != outputDeclareMap.end()) //output prior to input
-			continue;
-		totalCost++;
-	}
-
-	for (map<Node*, string>::iterator it = outputDeclareMap.begin(); it != outputDeclareMap.end(); ++it) {
-		if (inputDeclareMap.find(it->first) != inputDeclareMap.end())
-			inputDeclareMap.erase(it->first);
-		totalCost++;
-	}
-	for (map<Node*, string>::iterator it = newGateMap.begin(); it != newGateMap.end(); ++it) {
-		totalCost++;
-	}
-	cout << "Success cost:" << totalCost << "\n";
-	patch.info.cost = totalCost;
-	cout << "---------costEND--------------\n";
-	return patch;
-}
-
 void generatePatchPIPO(string type, string name, Graph& graph)
 {
 	//if (name.find("\\") != string::npos)
@@ -2520,13 +2368,8 @@ void readOptPatchBlif(Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNo
 	ifstream infile("opt_patch.blif");
 	string line;
 	map<string, Node*> checkExist;
-	map<string, string> patchPI;
-	map<string, string> patchPO;
 	int notGatePos = 0;
 	int state = 0;// 0:comment 1:inputs 2:outputs 3:names
-	readOptPatchPI(infile, currPatchGraph, patchPI);
-	readOptPatchPO(infile, currPatchGraph, patchPO);
-
 	while (1) {
 		size_t _namesPos;
 		getline(infile, line);
@@ -2536,92 +2379,15 @@ void readOptPatchBlif(Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNo
 			//remove .names in line
 			line = line.substr(_namesPos + 7, line.size() - 1);
 			//transfer blif into node
-			blif2Graph(infile, line, currPatchGraph, newGoldenRemoveNode, checkExist, notGatePos, patchPI, patchPO);
+			blif2Graph(infile, line, currPatchGraph, newGoldenRemoveNode, checkExist, notGatePos);
 			state = 1;
 		}
 	}
 	infile.close();
 }
-void readOptPatchPI(ifstream& infile, Graph& currPatchGraph, map<string, string>& patchPI)
-{
-	bool finish = false;
-	bool findInput = false;
-	stringstream ss;
-	map<string, Node*>::iterator it = currPatchGraph.PIMAP.begin();
-	while (1) {
-		string line;
-		getline(infile, line);
-		if (line.find(".inputs") == string::npos && findInput == false)
-			continue;
-		else {
-			if (findInput)
-				line.erase(0, 1);
-			findInput = true;
-		}
-
-		if (line[line.size() - 1] != '\\')
-			finish = true;
-		ss << line;
-		while (1) {
-			string eachNode;
-			getline(ss, eachNode, ' ');
-			//continue when meet .inputs
-			if (eachNode == ".inputs")
-				continue;
-			//break when meet \\ and back blank
-			if (eachNode == "\\" || eachNode.size() == 0)
-				break;
-			patchPI[eachNode] = it->first;
-			it++;
-		}
-		ss.str("");
-		ss.clear();
-		if (finish)
-			break;
-	}
-}
-
-void readOptPatchPO(ifstream& infile, Graph& currPatchGraph, map<string, string>& patchPO)
-{
-	bool finish = false;
-	bool findOutput = false;
-	stringstream ss;
-	int i = 0;
-	while (1) {
-		string line;
-		getline(infile, line);
-		if (line.find(".outputs") == string::npos && findOutput == false)
-			continue;
-		else {
-			if (findOutput)
-				line.erase(0, 1);
-			findOutput = true;
-		}
-
-		if (line[line.size() - 1] != '\\')
-			finish = true;
-		ss << line;
-		while (1) {
-			string eachNode;
-			getline(ss, eachNode, ' ');
-			//continue when meet .inputs
-			if (eachNode == ".outputs")
-				continue;
-			//break when meet \\ and back blank
-			if (eachNode == "\\" || eachNode.size() == 0)
-				break;
-			patchPO[eachNode] = currPatchGraph.PO[i]->name;
-			i++;
-		}
-		ss.str("");
-		ss.clear();
-		if (finish)
-			break;
-	}
-}
 
 void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*, bool>& newGoldenRemoveNode,
-	map<string, Node*>& checkExist, int& notGatePos, map<string, string>& patchPI, map<string, string>& patchPO)
+	map<string, Node*>& checkExist, int& notGatePos)
 {
 	stringstream ss;
 	vector<Node*> NodeList;
@@ -2643,13 +2409,9 @@ void blif2Graph(ifstream& infile, string& line, Graph& currPatchGraph, map<Node*
 	}
 
 	for (int gatePos = 0; gatePos < NodeListString.size(); ++gatePos) {
-		string new_line = NodeListString[gatePos];
-		//replace with original PI and PO names
-		if (patchPI.find(new_line) != patchPI.end())
-			new_line = patchPI[new_line];
-		else if (patchPO.find(new_line) != patchPO.end())
-			new_line = patchPO[new_line];
 		//node name
+		string new_line = NodeListString[gatePos];
+
 		if (currPatchGraph.PIMAP.find(new_line) != currPatchGraph.PIMAP.end()) {
 			NodeList.push_back(currPatchGraph.PIMAP[new_line]);
 			continue;
@@ -2922,7 +2684,7 @@ void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, 
 }
 void optimizePatch()
 {
-	system("./optimize2.out ./blif/check.blif");
+	system("./optimize.out ./blif/check.blif");
 }
 
 int selectBlifGateType(ifstream& infile)
@@ -2948,17 +2710,97 @@ int selectBlifGateType(ifstream& infile)
 	return -1;
 
 }
-bool patchSelfVerify()
+
+/*compare original netlist -> patchedG1 and golden netlist -> R2*/
+bool compareNetlist(Graph& R2, Graph& patchedG1)
 {
-	system("./verify");
+	ofstream outfile("./blif/check.blif");
 
-	ifstream infile("verify_out.txt");
-	string result;
-	infile >> result;
-	infile.close();
-	if (result == "UNSAT")
-		return true;
+	//write -> ".model check"
+	outfile << ".model check" << endl;
 
-	return false;
+	//write -> ".inputs ..."
+	outfile << ".inputs";
+	for (int i = 0; i < R2.PI.size(); ++i) {
+		outfile << " " << R2.PI[i]->name;
+	}
+	outfile << endl;
+
+	//write -> ".outputs ..."
+	outfile << ".outputs " << "output";
+	outfile << endl;
+
+	map<Node*, bool> isVisitedG1;
+	map<Node*, bool> isVisitedR2;
+	for (int i = 0; i < patchedG1.netlist.size(); ++i)
+		isVisitedG1[patchedG1.netlist[i]] = false;
+
+	for (int i = 0; i < R2.netlist.size(); ++i)
+		isVisitedR2[R2.netlist[i]] = false;
+
+	//Original Netlist PI
+	set<Node*>::iterator it = patchedG1.PIFanoutNode.begin();
+	for (; it != patchedG1.PIFanoutNode.end(); ++it) {
+		Node* fanoutNode = *it;
+		outputDotNames(outfile, fanoutNode, "patchG1");
+		isVisitedG1[fanoutNode] = true;
+	}
+
+	//Golden Netlist PI
+	it = R2.PIFanoutNode.begin();
+	for (; it != R2.PIFanoutNode.end(); ++it) {
+		Node* fanoutNode = *it;
+		outputDotNames(outfile, fanoutNode, "R2");
+		isVisitedR2[fanoutNode] = true;
+	}
+
+	//output Constant
+	vector<bool> existConst(2, false);
+	for (int i = 0; i < R2.Constants.size(); ++i) {
+		if (R2.Constants[i] != NULL || patchedG1.Constants[i] != NULL)
+			existConst[i] = true;
+	}
+	outputConst(outfile, existConst);
+
+	//output Original Netlist internal node
+	for (int i = 0; i < patchedG1.netlist.size(); ++i) {
+		if (!isVisitedG1[patchedG1.netlist[i]] && patchedG1.netlist[i]->type != 9
+			&& patchedG1.netlist[i]->type != 11)
+			outputDotNames(outfile, patchedG1.netlist[i], "patchG1");
+	}
+
+	//output Golden Netlist internal node
+	for (int i = 0; i < R2.netlist.size(); ++i) {
+		if (!isVisitedR2[R2.netlist[i]] && R2.netlist[i]->type != 9
+			&& R2.netlist[i]->type != 11)
+			outputDotNames(outfile, R2.netlist[i], "R2");
+	}
+
+	//build the miter
+	for (int i = 0; i < R2.PO.size(); ++i) {
+		buildMiter(outfile, patchedG1.PO[i], R2.PO[i], i, "patchG1", "R2");
+	}
+
+	outfile << ".names";
+	for (int i = 0; i < R2.PO.size(); ++i) {
+		outfile << " miter_" << toString(i);
+	}
+
+	if (R2.PO.size() > 1) {
+		outfile << " outputTmp" << endl;
+		for (int i = 0; i < R2.PO.size(); ++i) {
+			outfile << "0";
+		}
+		outfile << " 0" << endl;
+		outfile << ".names" << " outputTmp output" << endl << "1 1" << endl;
+	}
+	else {
+		outfile << " output" << endl;
+		outfile << "1 1" << endl;
+	}
+	outfile << ".end";
+	outfile.close();
+
+	//call minisat and return result
+	return SATsolver();
 }
-
