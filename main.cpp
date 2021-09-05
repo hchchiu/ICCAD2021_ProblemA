@@ -427,7 +427,7 @@ int main(int argc, char* argv[])
 
 	MatchInfo m3 = matchInfo;
 	//start optimize patch with abc tool
-	patchOptimize(m3);
+	//patchOptimize(m3);
 	cout << "patchOptimize\n";
 	test = costAccounting(m3, R2, G1);
 	cout << test.info.cost << " : " << currcost << "\n";
@@ -457,13 +457,6 @@ int main(int argc, char* argv[])
 			break;
 		}
 	}
-	//start self verify
-	/*
-	if (patchSelfVerify())
-		cout << "Patched G1 Self Verify Success!" << endl;
-	else
-		cout << "Patched G1 Self Verify Error!" << endl;
-	*/
 }
 
 void loadFile(Graph& graph, char* argv)
@@ -1880,10 +1873,10 @@ string generatePatchFormat(Node* node)
 			if (name.find("[") != string::npos) {  // in R2 represent it need to be add new gate
 				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
 				name = name.substr(0, name.find("[")) + req;
-				name = "patchNew_" + name;
+				name = "patchNew_" + name + "_" + toString(node->id) ;
 			}
 			else
-				name = "patchNew_" + name;
+				name = "patchNew_" + name + "_" + toString(node->id);
 		}
 
 	}
