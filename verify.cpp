@@ -136,11 +136,11 @@ int main(int argc, char* argv[])
 	//start verify
 	Graph patchedG1;
 	loadFile(patchedG1, "patchG1.v");
-	if (compareNetlist(R2, patchedG1))
+	/*if (compareNetlist(R2, patchedG1))
 		cout << "Patched G1 Verify Success!" << endl;
 	else
-		cout << "Patched G1 Verify Error!" << endl;
-
+		cout << "Patched G1 Verify Error!" << endl;*/
+	compareNetlist(R2, patchedG1);
 }
 
 
@@ -815,7 +815,7 @@ bool SATsolver()
 
 void abcBlif2CNF()
 {
-	system("./blif2cnf.out ./blif/check.blif");
+	system("./blif2cnf.out ./blif/check.blif > abcSreen.txt");
 }
 
 bool readSATsolverResult()

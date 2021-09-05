@@ -372,7 +372,7 @@ int main(int argc, char* argv[])
 	PatchGraph test;
 	int currcost;
 	structureCompareMain(G1, R2, matchInfo);
-	cout << "structureCompareMain\n";
+	//cout << "structureCompareMain\n";
 	test = costAccounting(matchInfo, R2, G1);
 	currcost = test.info.cost;
 	int k = 0;
@@ -397,9 +397,9 @@ int main(int argc, char* argv[])
 
 	MatchInfo m1 = matchInfo;
 	randomSimulation(m1);
-	cout << "randomSimulation\n";
+	//cout << "randomSimulation\n";
 	test = costAccounting(m1, R2, G1);
-	cout << test.info.cost << " : " << currcost << "\n";
+	//cout << test.info.cost << " : " << currcost << "\n";
 	if (test.info.cost <= currcost) {
 		currcost = test.info.cost;
 		matchInfo = m1;
@@ -416,9 +416,9 @@ int main(int argc, char* argv[])
 	MatchInfo m2 = matchInfo;
 	/*start optimize*/
 	backStructureComapre(G1, R2, m2);
-	cout << "backStructureComapre\n";
+	//cout << "backStructureComapre\n";
 	test = costAccounting(m2, R2, G1);
-	cout << test.info.cost << " : " << currcost << "\n";
+	//cout << test.info.cost << " : " << currcost << "\n";
 	if (test.info.cost <= currcost) {
 		currcost = test.info.cost;
 		matchInfo = m2;
@@ -427,16 +427,16 @@ int main(int argc, char* argv[])
 
 	MatchInfo m3 = matchInfo;
 	//start optimize patch with abc tool
-	//patchOptimize(m3);
-	cout << "patchOptimize\n";
+	patchOptimize(m3);
+	//cout << "patchOptimize\n";
 	test = costAccounting(m3, R2, G1);
-	cout << test.info.cost << " : " << currcost << "\n";
+	//cout << test.info.cost << " : " << currcost << "\n";
 	if (test.info.cost <= currcost) {
 		currcost = test.info.cost;
 		matchInfo = m3;
 		eachMatchInfoVersion.push_back(m3);
 	}
-	cout << "eachVersionMatchInfo size : " << eachMatchInfoVersion.size() << endl;
+	//cout << "eachVersionMatchInfo size : " << eachMatchInfoVersion.size() << endl;
 
 
 	//output the patch.v
@@ -453,7 +453,7 @@ int main(int argc, char* argv[])
 		int i = 0;
 		//make sure the patch is correct
 		if (patchSelfVerify() || m == 0) {
-			cout << "Success output patch version:" << m << endl;
+			//cout << "Success output patch version:" << m+1 << endl;
 			break;
 		}
 	}
@@ -1154,7 +1154,7 @@ void randomSimulation(MatchInfo& matchInfo)
 						graph2Blif(og_it->first, gd_it->first);
 						//call SAT solver
 						if (SATsolver()) {
-							cout << "Success golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
+							//cout << "Success golden: " << gd_it->first->name << " <-equal-> original: " << og_it->first->name << endl;
 							matchInfo.matches[gd_it->first] = og_it->first;
 							removeMAP[gd_it->first] = og_it->first;
 						}
@@ -1306,7 +1306,8 @@ void outputConst(ofstream& outfile, vector<bool>& faninConst)
 void outputDotNames(ofstream& outfile, Node* currNode, string currGraphName)
 {
 	if (currNode->name == "n1241_n1242")
-		cout << "!!!";
+		int k = 0;
+		//cout << "!!!";
 
 	int type;
 	if (currNode->type == 10 || currNode->type == 9)
@@ -1446,8 +1447,8 @@ bool readSATsolverResult()
 
 void abcBlif2CNF()
 {
-	//system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
-	system("./blif2cnf.out ./blif/check.blif");
+	system("./blif2cnf.out ./blif/check.blif > abcScreen.txt");
+	//system("./blif2cnf.out ./blif/check.blif");
 }
 
 void backStructureComapre(Graph origin, Graph golden, MatchInfo& matchInfo)
@@ -1621,14 +1622,14 @@ PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
 			if (names[i] == "") { //have error
-				cout << "PO to PI generate patch Error!\n";
+				//cout << "PO to PI generate patch Error!\n";
 			}
 		}
 		names[2] = generatePatchFormat(originNode);
 		outputDeclareMap[originNode] = names[2];
 		string instrucs = generateInstruction(originNode, names, ecoNumber++, totalCost);
 		if (instrucs == "error") {
-			cout << "generatePatchVerilog backMatches error!\n";
+			//cout << "generatePatchVerilog backMatches error!\n";
 			continue;
 		}
 		instructionSet.push_back(instrucs);
@@ -1651,16 +1652,16 @@ PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
 			if (names[i] == "") { //have error
-				cout << "goldenRemoveNode generate patch Error!\n";
+				//cout << "goldenRemoveNode generate patch Error!\n";
 			}
 		}
-		names[2] = generatePatchFormat(currentNode);
+		//names[2] = generatePatchFormat(currentNode);
 		isInGoldenRemoveNode(names[2], newGateMap, currentNode);
 		if (currentNode->type == 10)
 			outputDeclareMap[currentNode] = names[2];
 		string instrucs = generateInstruction(currentNode, names, ecoNumber++, totalCost);
 		if (instrucs == "error") {
-			cout << "generatePatchVerilog goldenRemoveNode error!\n";
+			//cout << "generatePatchVerilog goldenRemoveNode error!\n";
 			continue;
 		}
 		instructionSet.push_back(instrucs);
@@ -1684,10 +1685,10 @@ PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
 			if (names[i] == "") { //have error
-				cout << "leakingNode generate patch Error!\n";
+				//cout << "leakingNode generate patch Error!\n";
 			}
 		}
-		names[2] = generatePatchFormat(currentNode);
+		names[2] = newGateMap[currentNode];
 		instructionSet.push_back(generateInstruction(currentNode, names, ecoNumber++, totalCost));
 
 	}
@@ -1752,7 +1753,7 @@ PatchGraph generatePatchVerilog(MatchInfo& matchInfo, Graph& R2, Graph& G1, char
 		verilog2graph(command, patch.graph, regists);
 	}
 	outfile << "endmodule\n";
-	cout << "Success cost:" << totalCost << "\n";
+	//cout << "Success cost:" << totalCost << "\n";
 	patch.info.cost = totalCost;
 	return patch;
 
@@ -1767,7 +1768,7 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 	if (gate == "PO")
 		gate = getTypeString(node->realGate);
 	if (gate == "error") {
-		cout << names[2] << "--->" << "generateInstruction Error !" << endl;
+		//cout << names[2] << "--->" << "generateInstruction Error !" << endl;
 		return "error";
 	}
 
@@ -1797,7 +1798,7 @@ string generateInstruction(Node* node, vector<string> names, int eco, int& cost)
 string getTypeString(int type)
 {
 	if (type == -1) {
-		cout << "getTypeString function error!! (type==-1)" << endl;
+		//cout << "getTypeString function error!! (type==-1)" << endl;
 		return "error";
 	}
 	vector<string> gates = { "not","and","or","nand","nor","xor","xnor","buf","assign","PI","PO" };
@@ -1873,7 +1874,7 @@ string generatePatchFormat(Node* node)
 			if (name.find("[") != string::npos) {  // in R2 represent it need to be add new gate
 				string req = name.substr(name.find("[") + 1, name.find("]") - name.find("[") - 1);
 				name = name.substr(0, name.find("[")) + req;
-				name = "patchNew_" + name + "_" + toString(node->id) ;
+				name = "patchNew_" + name + "_" + toString(node->id);
 			}
 			else
 				name = "patchNew_" + name + "_" + toString(node->id);
@@ -1902,8 +1903,13 @@ void isInMatchCondition(string& name, map<Node*, Node*> matches, Node* node, map
 void isInGoldenRemoveNode(string& name, map<Node*, string>& newGateMap, Node* node)
 {
 	name = generatePatchFormat(node);
-	if (node->type != 10)
-		newGateMap[node] = name;
+	if (node->type != 10) {
+		if (newGateMap.find(node) != newGateMap.end())
+			name = newGateMap.find(node)->second;
+		else {
+			newGateMap[node] = name;
+		}
+	}
 }
 
 void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<Node*, string>& newGateMap)
@@ -1913,12 +1919,14 @@ void isLeakingNode(string& name, vector<Node*>& leakingNodeVec, Node* node, map<
 		leakingNodeVec.push_back(node);
 		newGateMap[node] = name;
 	}
+	else
+		name = newGateMap.find(node)->second;
 
 }
 
 PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 {
-	cout << "---------costAccounting--------------\n";
+	//cout << "---------costAccounting--------------\n";
 	map<Node*, string> inputDeclareMap; //module(....) input....
 	map<Node*, string> outputDeclareMap; //module(....) output....
 	map<Node*, string> newGateMap; //wire...
@@ -1953,14 +1961,14 @@ PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
 			if (names[i] == "") { //have error
-				cout << "PO to PI generate patch Error!\n";
+				//cout << "PO to PI generate patch Error!\n";
 			}
 		}
 		names[2] = generatePatchFormat(originNode);
 		outputDeclareMap[originNode] = names[2];
 		string instrucs = generateInstruction(originNode, names, ecoNumber++, totalCost);
 		if (instrucs == "error") {
-			cout << "generatePatchVerilog backMatches error!\n";
+			//cout << "generatePatchVerilog backMatches error!\n";
 			continue;
 		}
 		instructionSet.push_back(instrucs);
@@ -1983,16 +1991,16 @@ PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
 			if (names[i] == "") { //have error
-				cout << "goldenRemoveNode generate patch Error!\n";
+				//cout << "goldenRemoveNode generate patch Error!\n";
 			}
 		}
-		names[2] = generatePatchFormat(currentNode);
+		//names[2] = generatePatchFormat(currentNode);
 		isInGoldenRemoveNode(names[2], newGateMap, currentNode);
 		if (currentNode->type == 10)
 			outputDeclareMap[currentNode] = names[2];
 		string instrucs = generateInstruction(currentNode, names, ecoNumber++, totalCost);
 		if (instrucs == "error") {
-			cout << "generatePatchVerilog goldenRemoveNode error!\n";
+			//cout << "generatePatchVerilog goldenRemoveNode error!\n";
 			continue;
 		}
 		instructionSet.push_back(instrucs);
@@ -2016,10 +2024,10 @@ PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 				isLeakingNode(names[i], leakingNodeVec, faninNode, newGateMap);
 
 			if (names[i] == "") { //have error
-				cout << "leakingNode generate patch Error!\n";
+				//cout << "leakingNode generate patch Error!\n";
 			}
 		}
-		names[2] = generatePatchFormat(currentNode);
+		names[2] = newGateMap[currentNode];
 		instructionSet.push_back(generateInstruction(currentNode, names, ecoNumber++, totalCost));
 
 	}
@@ -2042,9 +2050,9 @@ PatchGraph costAccounting(MatchInfo& matchInfo, Graph& R2, Graph& G1)
 	for (map<Node*, string>::iterator it = newGateMap.begin(); it != newGateMap.end(); ++it) {
 		totalCost++;
 	}
-	cout << "Success cost:" << totalCost << "\n";
+	//cout << "Success cost:" << totalCost << "\n";
 	patch.info.cost = totalCost;
-	cout << "---------costEND--------------\n";
+	//cout << "---------costEND--------------\n";
 	return patch;
 }
 
@@ -2223,7 +2231,7 @@ void generatePatchG1(Graph& origin, PatchInfo& info, Graph& patchG1)
 		names[2] = it->first->name;
 		string command = generateInstruction(it->first, names, 1, cost);
 		if (command == "error") {
-			cout << "generatePatchG1 error!!\n";
+			//cout << "generatePatchG1 error!!\n";
 			continue;
 		}
 		command = command.substr(0, command.size() - 1);
@@ -2434,26 +2442,26 @@ void patchOptimize(MatchInfo& matchInfo)
 	}
 	//output blif
 	outputPatchBlif(currPatchGraph, isVisitedPatch);
-	cout << "Success outputPatchBlif!" << endl;
+	//cout << "Success outputPatchBlif!" << endl;
 
 	//optimize the patch
 	optimizePatch();
-	cout << "Success optimize the patch!" << endl;
+	//cout << "Success optimize the patch!" << endl;
 
 	//read optimized patch blif and transfer into goldenRemoveNode
 	map<Node*, bool> newGoldenRemoveNode;
 	readOptPatchBlif(currPatchGraph, newGoldenRemoveNode);
-	cout << "Success read the New patch!" << endl;
+	//cout << "Success read the New patch!" << endl;
 
 	//combine split gate into xor or xnor gate
 	/**/
 	removeRedundantNode(newGoldenRemoveNode);
-	cout << "Success removeRedundantNode!" << endl;
+	//cout << "Success removeRedundantNode!" << endl;
 
 
 	//remove old R2 node
 	removeOldNode(currPatchGraph, newGoldenRemoveNode, matchInfo.goldenRemoveNode);
-	cout << "Success removeOldNode!" << endl;
+	//cout << "Success removeOldNode!" << endl;
 
 	//assign new goldenRemoveNode
 	matchInfo.goldenRemoveNode = newGoldenRemoveNode;
@@ -2917,7 +2925,7 @@ void removeOldNode(Graph currPatchGraph, map<Node*, bool>& newGoldenRemoveNode, 
 }
 void optimizePatch()
 {
-	system("./optimize2.out ./blif/check.blif");
+	system("./optimize2.out ./blif/check.blif > optScreen.txt");
 }
 
 int selectBlifGateType(ifstream& infile)
@@ -2939,7 +2947,7 @@ int selectBlifGateType(ifstream& infile)
 	else if (gateTypeLine == "01 0") return 201; // and (a+b')
 
 	//error gate type
-	cout << "Patch Ocurr Error Gate Type!" << endl;
+	//cout << "Patch Ocurr Error Gate Type!" << endl;
 	return -1;
 
 }
@@ -2951,8 +2959,12 @@ bool patchSelfVerify()
 	string result;
 	infile >> result;
 	infile.close();
-	if (result == "UNSAT")
+	if (result == "UNSAT") {
+		ofstream outfile("verify_out.txt");
+		outfile << "SAT" << endl;
+		outfile.close();
 		return true;
+	}
 
 	return false;
 }
